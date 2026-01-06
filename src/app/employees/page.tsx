@@ -5,6 +5,8 @@ import { collection, getDocs, addDoc, writeBatch, doc, query, where } from 'fire
 import { db } from '../../lib/firebase';
 import { Employee } from '../../types/employee';
 import * as XLSX from 'xlsx';
+// 👇 1. เพิ่ม Import เพื่อหาปีประเมินปัจจุบัน
+import { getCurrentPeriod, getEvaluationYear } from '../../utils/dateUtils';
 
 // --- 1. Helper Functions ---
 const parseLateTime = (value: any): number => {
@@ -38,13 +40,37 @@ export default function EmployeeListPage() {
   const [loading, setLoading] = useState(true);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
+  // ดึงปีปัจจุบันมาแสดงในหัวตาราง
+  const currentEvalYear = getEvaluationYear ? getEvaluationYear() : new Date().getFullYear();
+
   // --- Fetch Employees ---
   const fetchEmployees = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, 'users'));
+      setLoading(true);
+
+      // 1. ดึง Users ทั้งหมด
+      const usersQuery = await getDocs(collection(db, 'users'));
+      
+      // 2. ดึง Evaluations ของรอบปัจจุบัน (เพื่อให้ได้คะแนนล่าสุด)
+      const currentPeriod = getCurrentPeriod ? getCurrentPeriod() : `${currentEvalYear}-Annual`;
+      const evalsQuery = query(collection(db, 'evaluations'), where('period', '==', currentPeriod));
+      const evalsSnapshot = await getDocs(evalsQuery);
+
+      // สร้าง Map เก็บคะแนน: Key = employeeDocId, Value = disciplineScore
+      const scoreMap = new Map<string, any>();
+      evalsSnapshot.forEach(doc => {
+          const d = doc.data();
+          // เก็บ disciplineScore (คะแนนรวม) หรือถ้าไม่มีให้เป็น -
+          scoreMap.set(d.employeeDocId, d.disciplineScore);
+      });
+
       const data: Employee[] = [];
-      querySnapshot.forEach((doc) => {
+      usersQuery.forEach((doc) => {
         const d = doc.data();
+        
+        // ดึงคะแนนจาก Map
+        const evalScore = scoreMap.get(doc.id);
+
         data.push({
           id: doc.id,
           employeeId: d.employeeId || "",
@@ -56,13 +82,16 @@ export default function EmployeeListPage() {
           level: d.level || "",
           startDate: d.startDate,
           isActive: d.isActive ?? true,
-          // ดึง Snapshot ปัจจุบันมาแสดง
+          // Snapshot ข้อมูลขาดลามาสาย
           totalLateMinutes: d.totalLateMinutes || 0,
           totalSickLeaveDays: d.totalSickLeaveDays || 0,
           warningCount: d.warningCount || 0,
           totalAbsentDays: d.totalAbsentDays || 0,
+          // 👇 ใส่คะแนนประเมินเข้าไปใน Object (ต้องแก้ Type Employee หรือ cast as any ก็ได้)
+          evaluationScore: evalScore !== undefined ? evalScore : null 
         } as any);
       });
+
       setEmployees(data);
     } catch (error) {
       console.error("❌ Error fetching employees:", error);
@@ -126,11 +155,15 @@ export default function EmployeeListPage() {
               <th className="border-b p-4 text-left font-semibold text-gray-600">ลาป่วย (วัน)</th>
               <th className="border-b p-4 text-left font-semibold text-gray-600">ขาดงาน (วัน)</th>
               <th className="border-b p-4 text-left font-semibold text-gray-600">ใบเตือน</th>
+              {/* 👇 เพิ่มหัวตารางคะแนน */}
+              <th className="border-b p-4 text-center font-bold text-[#ff5722] bg-orange-50">
+                คะแนนปี {currentEvalYear}
+              </th>
             </tr>
           </thead>
           <tbody>
             {employees.length === 0 ? (
-               <tr><td colSpan={6} className="p-10 text-center text-gray-500">ไม่พบข้อมูลพนักงาน</td></tr>
+               <tr><td colSpan={7} className="p-10 text-center text-gray-500">ไม่พบข้อมูลพนักงาน</td></tr>
             ) : (
               employees.map((emp: any) => (
                 <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
@@ -143,12 +176,22 @@ export default function EmployeeListPage() {
                   <td className={`border-b p-4 font-mono ${emp.totalSickLeaveDays > 0 ? 'text-orange-600 font-bold' : 'text-gray-400'}`}>
                     {emp.totalSickLeaveDays > 0 ? emp.totalSickLeaveDays : '-'}
                   </td>
-                  {/* เพิ่มคอลัมน์ขาดงาน */}
                    <td className={`border-b p-4 font-mono ${emp.totalAbsentDays > 0 ? 'text-red-800 font-bold' : 'text-gray-400'}`}>
                     {emp.totalAbsentDays > 0 ? emp.totalAbsentDays : '-'}
                   </td>
                   <td className={`border-b p-4 font-mono ${emp.warningCount > 0 ? 'text-red-700 font-bold' : 'text-gray-400'}`}>
                     {emp.warningCount > 0 ? emp.warningCount : '-'}
+                  </td>
+
+                  {/* 👇 แสดงคะแนนประเมิน */}
+                  <td className="border-b p-4 text-center bg-orange-50/30">
+                    {emp.evaluationScore !== null ? (
+                        <span className="bg-[#ff5722] text-white px-3 py-1 rounded-full font-bold shadow-sm">
+                            {emp.evaluationScore}
+                        </span>
+                    ) : (
+                        <span className="text-gray-300 text-sm italic">รอประเมิน</span>
+                    )}
                   </td>
                 </tr>
               ))
@@ -164,7 +207,7 @@ export default function EmployeeListPage() {
   );
 }
 
-// --- ImportModal Component ---
+// --- ImportModal Component (คงเดิมตาม Code เก่าของคุณ) ---
 function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
     const [fileType, setFileType] = useState<'attendance' | 'leave' | 'warning'>('attendance');
     const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
@@ -177,16 +220,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
     const [tableRows, setTableRows] = useState<any[][]>([]);
     const [inputKey, setInputKey] = useState(Date.now()); 
 
-    const getTemplateInfo = () => {
-        switch(fileType) {
-            case 'attendance': return { name: 'DB_ขาดสาย.xlsx', path: '/templates/DB_ขาดสาย.xlsx' };
-            case 'leave': return { name: 'DB_การลา.xlsx', path: '/templates/DB_การลา.xlsx' };
-            case 'warning': return { name: 'DB_ใบเตือน.xlsx', path: '/templates/DB_ใบเตือน.xlsx' };
-        }
-    };
-
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        // ... (Logic เดิม ไม่ต้องแก้) ...
         const file = e.target.files?.[0];
         if (!file) return;
         setFileName(file.name);
@@ -243,7 +277,6 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
         }
     };
 
-    // --- Logic การบันทึก (ฉบับสมบูรณ์) ---
     const handleConfirmSave = async () => {
         if (tableRows.length === 0) return;
         setLoading(true);
@@ -267,7 +300,6 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 return;
             }
 
-            // --- 1. DB_ขาดสาย (มาสาย + ขาดงาน) ---
             if (fileType === 'attendance') {
                 const lateIndex = headerStr.findIndex(h => h.includes("มาสาย")); 
                 const absentIndex = headerStr.findIndex(h => h.includes("ขาดงาน")); 
@@ -287,7 +319,6 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                             absentDays = parseFloat(String(row[absentIndex])) || 0;
                         }
 
-                        // A. ลง Yearly Stats
                         const statsRef = doc(db, 'users', docId, 'yearlyStats', selectedYear);
                         batch.set(statsRef, { 
                             totalLateMinutes: minutes,
@@ -295,7 +326,6 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                             year: parseInt(selectedYear) 
                         }, { merge: true });
 
-                        // B. ลง Snapshot ที่ User Root (เฉพาะถ้าเป็นปีปัจจุบัน)
                         if (selectedYear === String(new Date().getFullYear())) {
                             batch.set(doc(db, 'users', docId), {
                                 totalLateMinutes: minutes,
@@ -306,7 +336,6 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     }
                 });
 
-            // --- 2. DB_การลา (ลาป่วย) ---
             } else if (fileType === 'leave') {
                 const sickIndex = headerStr.findIndex(h => h === "ลาป่วย" || h.includes("ลาป่วย")); 
                 if (sickIndex === -1) { alert("ไม่พบคอลัมน์ 'ลาป่วย'"); setLoading(false); return; }
@@ -332,7 +361,6 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     }
                 });
 
-            // --- 3. DB_ใบเตือน ---
             } else if (fileType === 'warning') {
                 const warningCounts = new Map<string, number>();
                 tableRows.forEach(row => {

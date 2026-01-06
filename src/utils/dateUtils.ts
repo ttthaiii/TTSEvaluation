@@ -37,3 +37,31 @@ export const calculateServiceTenure = (startDate: string | Timestamp | null | un
 
   return `${years} ปี ${months} เดือน`;
 };
+
+/**
+ * คำนวณปีประเมิน (Evaluation Year)
+ * Logic: ถ้าปัจจุบันคือเดือน ม.ค.(0) - มี.ค.(2) ให้ถือว่าเป็นรอบการประเมินของ "ปีที่แล้ว"
+ * แต่ถ้าเป็นเดือน เม.ย. ขึ้นไป ให้ถือว่าเป็นรอบของ "ปีปัจจุบัน"
+ */
+export const getEvaluationYear = (): number => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0 = Jan, 1 = Feb, ...
+
+  // ถ้าอยู่ในช่วง มกรา - มีนา (Quarter 1) ให้ return ปีที่แล้ว
+  if (currentMonth <= 2) { 
+    return currentYear - 1;
+  }
+  
+  return currentYear;
+};
+
+/**
+ * สร้าง string สำหรับ Period เช่น "2025-Annual" หรือ "2025-H1"
+ */
+export const getCurrentPeriod = (): string => {
+    const year = getEvaluationYear();
+    // คุณสามารถเปลี่ยน Logic ตรงนี้ได้ถ้ามีแบ่ง H1/H2
+    // เบื้องต้นให้เป็น Annual (ทั้งปี) ไปก่อนตามโจทย์
+    return `${year}-Annual`;
+};
