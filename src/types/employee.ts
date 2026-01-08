@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 
 export interface Employee {
-  id: string; 
+  id: string;
   employeeId: string;
   firstName: string;
   lastName: string;
@@ -10,6 +10,8 @@ export interface Employee {
   section: string;
   level: string;
   // 👇 แก้ตรงนี้: ให้รองรับทั้ง String (คีย์เอง) และ Timestamp (ระบบเลือก)
-  startDate: string | Timestamp | null; 
+  startDate: string | Timestamp | null;
   isActive: boolean;
+  evaluatorId?: string;
+  evaluatorName?: string;
 }

@@ -8,6 +8,7 @@ import { calculateServiceTenure, getEvaluationYear, getCurrentPeriod } from '../
 import { Category, EvaluationRecord, QuestionItem, ScoringRule } from '../types/evaluation';
 import { EmployeeStats } from '../components/evaluations/EmployeeStatsCard';
 import { PopupData } from '../components/evaluations/ScoreHelperPopup';
+import { useSession } from 'next-auth/react';
 
 export const useEvaluation = () => {
     const [loading, setLoading] = useState(true);
@@ -22,9 +23,9 @@ export const useEvaluation = () => {
     const [scoringRules, setScoringRules] = useState<ScoringRule[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [disciplineScore, setDisciplineScore] = useState<number | string>("-");
-    const [totalScore, setTotalScore] = useState<number>(0); // 🔥 New State
+    const [totalScore, setTotalScore] = useState<number>(0);
     const [existingEvaluations, setExistingEvaluations] = useState<Record<string, EvaluationRecord>>({});
-    const [completedEvaluationIds, setCompletedEvaluationIds] = useState<Set<string>>(new Set()); // 🔥 New State for completion status
+    const [completedEvaluationIds, setCompletedEvaluationIds] = useState<Set<string>>(new Set());
     const [selectedSection, setSelectedSection] = useState<string>('');
     const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
@@ -34,6 +35,9 @@ export const useEvaluation = () => {
     const [popupScores, setPopupScores] = useState<Record<number, number>>({});
     const [integrityWarnings, setIntegrityWarnings] = useState<string[]>([]);
     const [activePopupId, setActivePopupId] = useState<string | undefined>(undefined);
+
+    // Auth Session
+    const { data: session, status } = useSession();
 
     // --- 1. Init Data & Fetch Rules ---
     const initData = async () => {
@@ -61,16 +65,14 @@ export const useEvaluation = () => {
                     level: d.level || "Monthly Staff",
                     startDate: d.startDate,
                     isActive: d.isActive ?? true,
+                    evaluatorId: d.evaluatorId || "", // Ensure field exists
                 } as Employee);
             });
 
             const qEvals = query(collection(db, 'evaluations'), where('period', '==', currentPeriod));
             const evalSnapshot = await getDocs(qEvals);
 
-
-
-            // ... (keep rules loading)
-
+            // Fetch Categories
             const qCats = query(collection(db, 'evaluation_categories'), orderBy('order'));
             const catSnap = await getDocs(qCats);
             const catsData = catSnap.docs.map(d => d.data() as Category);
@@ -87,8 +89,8 @@ export const useEvaluation = () => {
                         docId: doc.id,
                         scores: d.scores || {},
                         employeeDocId: d.employeeDocId,
-                        totalScore: d.totalScore, // 🔥 Store totalScore
-                        disciplineScore: d.disciplineScore // 🔥 Store disciplineScore
+                        totalScore: d.totalScore,
+                        disciplineScore: d.disciplineScore
                     };
 
                     // Check Completeness
@@ -96,16 +98,10 @@ export const useEvaluation = () => {
                     if (emp) {
                         let isComplete = true;
                         catsData.forEach(cat => {
-                            // Skip C for Monthly Staff
                             if (cat.id === 'C' && emp.level === 'Monthly Staff') return;
-
                             cat.questions.forEach(q => {
-                                // Skip ReadOnly
                                 if (q.isReadOnly) return;
-
-                                // Skip B-4 if HO
                                 if (q.id === 'B-4' && HO_SECTIONS.includes(emp.section)) return;
-
                                 if (d.scores?.[q.id] === undefined) {
                                     isComplete = false;
                                 }
@@ -131,12 +127,56 @@ export const useEvaluation = () => {
             });
 
             setEmployees(empList);
-            setSections(Array.from(sectionSet).sort());
+
+            // 🔥 Filter by Authenticated User (Evaluator)
+            // If Admin -> Show All
+            // If User -> Show Only employees where evaluatorId == session.user.employeeId
+            if (session?.user) {
+                const currentUser = session.user as any;
+
+                if (currentUser.role === 'Admin') {
+                    // ✅ Admin: Show All Sections & Employees
+                    setSections(Array.from(sectionSet).sort());
+                } else {
+                    // ✅ Normal User: Filter Subordinates (Recursive / Chain of Command)
+                    const currentEmpId = currentUser.employeeId;
+
+                    // Recursive function to get all down-line subordinates
+                    const getAllSubordinates = (managerId: string, allEmps: Employee[]): Employee[] => {
+                        const directReports = allEmps.filter(e => e.evaluatorId === managerId);
+                        let allSubs = [...directReports];
+
+                        directReports.forEach(report => {
+                            // Recursively find subordinates of this report (who is also an evaluator)
+                            const indirectReports = getAllSubordinates(report.employeeId, allEmps);
+                            allSubs = [...allSubs, ...indirectReports];
+                        });
+
+                        return allSubs;
+                    };
+
+                    const mySubordinates = getAllSubordinates(currentEmpId, empList);
+
+                    // De-duplicate if recursion causes overlap (though tree structure shouldn't)
+                    const uniqueSubordinates = Array.from(new Map(mySubordinates.map(item => [item.id, item])).values());
+
+                    if (uniqueSubordinates.length === 0) {
+                        console.warn(`⚠️ User ${currentEmpId} has no subordinates assigned.`);
+                    }
+
+                    // Update Sections specifically for subordinates
+                    const subSections = new Set<string>();
+                    uniqueSubordinates.forEach(e => subSections.add(e.section));
+                    setEmployees(uniqueSubordinates);
+                    setSections(Array.from(subSections).sort());
+                }
+            } else {
+                setEmployees([]);
+                setSections([]);
+            }
+
             setExistingEvaluations(evalMap);
             setScoringRules(rules);
-
-            // Moved category loading UP to be available for completion check
-            // setCategories(catsData); // Already set above
 
         } catch (error) {
             console.error("Error fetching data:", error);
@@ -146,8 +186,10 @@ export const useEvaluation = () => {
     };
 
     useEffect(() => {
-        initData();
-    }, []);
+        if (status === 'authenticated') {
+            initData();
+        }
+    }, [status, session]);
 
     // --- Safety Check Logic ---
     const validateScoringIntegrity = (rules: ScoringRule[], cats: Category[]) => {
@@ -159,9 +201,7 @@ export const useEvaluation = () => {
         systemVars.forEach(v => validIds.add(v));
         cats.forEach(c => c.questions.forEach(q => {
             validIds.add(q.id);
-            validIds.add(q.id);
             validIds.add(q.id.replace('-', '_'));
-            // Also add sanitized version (remove brackets, replace dash)
             validIds.add(q.id.replace(/[\[\]]/g, '').replace('-', '_'));
         }));
         rules.forEach(r => validIds.add(r.name));
@@ -274,50 +314,26 @@ export const useEvaluation = () => {
             let calculatedDisciplineScore: number | string = "-";
             let foundNamedDisciplineScore = false;
 
-            console.log("🧮 Stats Data:", JSON.stringify(stats));
-            console.log("🧮 Context Keys:", Object.keys(context));
-
-            // 🔥 Multi-pass calculation to resolve dependencies (e.g. Summation variables depending on component variables)
-            // Pass 1: Calculate foundational values
-            // 🔥 Fix: 2-Pass Calculation -> 5-Pass Calculation
-            // Pass 1-4: Propagate dependency chains (Discipline -> Behavior -> Score)
-            // Pass 5: Finalize
+            // 🔥 Multi-pass calculation
             for (let pass = 0; pass < 5; pass++) {
                 variables.forEach(v => {
                     try {
-                        // 🔥 Sanitize formula: remove brackets to prevent Matrix type interpretation
                         let cleanFormula = v.formula;
-
-                        // 🔥 Substitute [Variable] with (Value) to support Thai variable names in math.js
                         variables.forEach(subV => {
                             const pattern = `[${subV.name}]`;
-                            // Look up value in context (it might be 0 if not calculated yet, or pre-filled from context init)
                             const val = context[`VAR_${subV.name} `] || context[subV.name] || 0;
                             cleanFormula = cleanFormula.split(pattern).join(`(${val})`);
                         });
-
                         cleanFormula = cleanFormula.replace(/[\[\]]/g, '');
                         const result = math.evaluate(cleanFormula, context);
-
-                        // Only log on the final pass to reduce noise, unless it's an error
-                        if (pass === 1) {
-                            console.log(`🔹 Var[${v.name}] = ${result} (Formula: ${cleanFormula})`);
-                        }
-
                         context[`VAR_${v.name} `] = result;
                         context[v.name] = result;
 
-                        // 🔥 Support DISCIPLINE_SCORE as a Variable
                         if (v.name === 'DISCIPLINE_SCORE' || v.name === 'Discipline_Score' || v.name === 'รวมคะแนนขาดลามาสาย') {
                             calculatedDisciplineScore = Math.round(result * 100) / 100;
                             foundNamedDisciplineScore = true;
                         }
-
                     } catch (e) {
-                        // Only log errors on the final pass, as pass 1 might legitimately fail due to missing dependencies
-                        if (pass === 1) {
-                            console.error(`❌ Error Var[${v.name}]: `, e);
-                        }
                         context[`VAR_${v.name} `] = 0;
                         context[v.name] = 0;
                     }
@@ -333,60 +349,30 @@ export const useEvaluation = () => {
                         scoreFormula = scoreFormula.split(pattern).join(`(${val})`);
                     });
 
-                    // 🔥 Sanitize formula: remove remaining brackets (e.g. from [A_1] -> A_1)
-                    scoreFormula = scoreFormula.replace(/[\[\]]/g, '');
-
-                    const result = math.evaluate(scoreFormula, context);
-                    context[`VAR_${s.name} `] = result;
-                } catch (e) { }
-            });
-
-            // Variable declarations moved up
-
-
-            finalScores.forEach(s => {
-                try {
-                    let scoreFormula = s.formula;
-                    variables.forEach(v => {
-                        const pattern = `[${v.name}]`;
-                        const val = context[`VAR_${v.name} `] || 0;
-                        scoreFormula = scoreFormula.split(pattern).join(`(${val})`);
-                    });
-
                     finalScores.forEach(otherS => {
                         if (otherS.id !== s.id) {
                             const pattern = `[${otherS.name}]`;
                             const val = context[`VAR_${otherS.name} `] || 0;
-                            // Also sanitize other scores if they are matrices? No, context values are numbers.
                             scoreFormula = scoreFormula.split(pattern).join(`(${val})`);
                         }
                     });
 
-                    // 🔥 FIX: Sanitize brackets in Loop 2 as well!
                     scoreFormula = scoreFormula.replace(/[\[\]]/g, '');
-
                     const result = math.evaluate(scoreFormula, context);
-                    console.log(`🔸 Final Score[${s.name}] = ${result} (Formula: ${scoreFormula})`);
                     context[`VAR_${s.name}`] = result;
 
-                    // 1. Check Named Match (Priority)
                     if (s.name === 'DISCIPLINE_SCORE' || s.name === 'Discipline_Score') {
                         calculatedDisciplineScore = Math.round(result * 100) / 100;
                         foundNamedDisciplineScore = true;
                     }
-                    // 2. Check TargetField (Fallback) - Only if not already found by name
                     else if (s.targetField === 'disciplineScore' && !foundNamedDisciplineScore) {
                         calculatedDisciplineScore = Math.round(result * 100) / 100;
                     }
-
-                } catch (e) {
-                    // console.error(`Error final calc ${ s.name }: `, e);
-                }
+                } catch (e) { }
             });
 
             setDisciplineScore(calculatedDisciplineScore);
 
-            // 🔥 Capture TOTAL_SCORE
             const calculatedTotal = context['VAR_TOTAL_SCORE'] || context['VAR_Total_Score'] || 0;
             setTotalScore(typeof calculatedTotal === 'number' ? calculatedTotal : 0);
 
@@ -394,7 +380,6 @@ export const useEvaluation = () => {
             setDisciplineScore("Error");
         }
     };
-
 
     const handleSectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const sec = e.target.value;
@@ -427,15 +412,11 @@ export const useEvaluation = () => {
         const prevEval = existingEvaluations[empId];
 
         if (prevEval) {
-            // Default: Load existing scores (for partial data like AI Score)
             currentLoadedScores = prevEval.scores;
             setScores(prevEval.scores);
-
-            // Alert ONLY if fully complete
             if (emp && completedEvaluationIds.has(emp.id)) {
                 const confirmReEval = confirm(`⚠️ พนักงานคนนี้(${emp.firstName}) ถูกประเมินไปแล้ว คุณต้องการประเมินซ้ำหรือไม่ ? `);
                 if (!confirmReEval) {
-                    // User Cancelled -> Reset selection
                     setSelectedEmployeeId('');
                     setSelectedEmployee(null);
                     setScores({});
@@ -448,7 +429,6 @@ export const useEvaluation = () => {
             try {
                 const statsRef = doc(db, 'users', emp.id, 'yearlyStats', String(evalYear));
                 const statsSnap = await getDoc(statsRef);
-
                 let statsData: EmployeeStats;
                 if (statsSnap.exists()) {
                     statsData = statsSnap.data() as EmployeeStats;
@@ -459,10 +439,8 @@ export const useEvaluation = () => {
                         year: evalYear
                     } as any;
                 }
-
                 setEmployeeStats(statsData);
                 runDisciplineCalculation(statsData, currentLoadedScores, emp);
-
             } catch (err) {
                 console.error("Error fetching stats:", err);
             }
@@ -473,11 +451,9 @@ export const useEvaluation = () => {
     const handleScoreChange = (criteriaId: string, score: number) => {
         const newScores = { ...scores, [criteriaId]: score };
         setScores(newScores);
-
         if (employeeStats) {
             runDisciplineCalculation(employeeStats, newScores, selectedEmployee);
         }
-
     };
 
     const handleSubmit = async () => {
@@ -492,18 +468,17 @@ export const useEvaluation = () => {
                 department: selectedEmployee.department,
                 section: selectedEmployee.section,
                 level: selectedEmployee.level,
-                evaluator: "Admin",
+                evaluator: session?.user?.name || "Admin",
                 scores: scores,
-                aiScore: 0, // Legacy field kept for compatibility, score now in 'scores' map
+                aiScore: 0,
                 disciplineScore: disciplineScore,
-                totalScore: totalScore, // 🔥 Save Total Score
+                totalScore: totalScore,
                 updatedAt: Timestamp.now(),
                 period: currentPeriod,
                 evaluationYear: evalYear
             };
 
             const prevEval = existingEvaluations[selectedEmployee.id];
-
             if (prevEval) {
                 const docRef = doc(db, 'evaluations', prevEval.docId);
                 await setDoc(docRef, dataToSave, { merge: true });
@@ -516,13 +491,11 @@ export const useEvaluation = () => {
 
             alert("✅ บันทึกการประเมินเรียบร้อย!");
             await initData();
-
             setScores({});
             setSelectedEmployeeId('');
             setSelectedEmployee(null);
             setEmployeeStats(null);
             setDisciplineScore("-");
-
         } catch (error) {
             console.error("Error saving evaluation:", error);
             alert("❌ เกิดข้อผิดพลาดในการบันทึก: " + error);
@@ -531,23 +504,18 @@ export const useEvaluation = () => {
 
     const getDisplayCategories = () => {
         if (!selectedEmployee) return [];
-
         return categories.map(cat => {
             const validQuestions = cat.questions.filter(q => {
                 if (q.id === 'B-4' && HO_SECTIONS.includes(selectedEmployee.section)) return false;
-                if (q.isReadOnly) return false; // 🔥 Exclude ReadOnly items from main list (แยกรายการ ReadOnly ออกจากรายการปกติ)
+                if (q.isReadOnly) return false;
                 return true;
             });
-
             if (cat.id === 'C' && selectedEmployee.level === 'Monthly Staff') return null;
-
             if (validQuestions.length === 0) return null;
-
             return { ...cat, questions: validQuestions };
         }).filter(c => c !== null) as Category[];
     };
 
-    // Popup Logic
     const openPopup = (item: QuestionItem) => {
         if (popupData?.criteriaId === item.id) return;
         setPopupData({
@@ -580,15 +548,12 @@ export const useEvaluation = () => {
         if (values.length < popupData.subItems.length) return;
         const sum = values.reduce((a, b) => a + b, 0);
         const avg = (sum / values.length).toFixed(2);
-
         handleScoreChange(popupData.criteriaId, Math.round(parseFloat(avg)));
     };
 
-    // Get ReadOnly Items for Stats Card (ดึงรายการคะแนนดิบไปแสดงในการ์ดสถิติ)
     const getReadOnlyItems = () => {
         if (!selectedEmployee) return [];
         const items: { id: string; title: string; score: number | string; description?: string }[] = [];
-
         categories.forEach(cat => {
             cat.questions.forEach(q => {
                 if (q.isReadOnly) {
@@ -615,24 +580,23 @@ export const useEvaluation = () => {
         selectedEmployeeId,
         handleEmployeeChange,
         existingEvaluations,
-        completedEvaluationIds, // 🔥 Return this
+        completedEvaluationIds,
         selectedEmployee,
         employeeStats,
         disciplineScore,
-        totalScore, // 🔥 Return totalScore
+        totalScore,
         displayCategories: getDisplayCategories(),
-        readOnlyItems: getReadOnlyItems(), // 🔥 Return ReadOnly Items
+        readOnlyItems: getReadOnlyItems(),
         scores,
         handleScoreChange,
         handleSubmit,
         integrityWarnings,
-        // Popup
         activePopupId,
         openPopup,
         closePopup,
         handlePopupScore,
         applyPopupScore,
-        categories, // 🔥 Expose raw categories for Dashboard
+        categories,
         employees
     };
 };
