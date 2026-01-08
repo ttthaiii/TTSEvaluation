@@ -89,8 +89,19 @@
   - [x] Search & Filter ใช้งานได้จริง
   - [x] แก้ไขข้อมูล Yearly Stats และบันทึกลง Firestore ได้
   - [x] ตั้งรหัสผ่านใหม่และ Login ด้วยรหัสใหม่ได้
-  - [x] ตั้ง Username ใหม่และ Login ได้
+  - [ ] ตั้ง Username ใหม่และ Login ได้
   - [x] Links นำทางถูกต้อง
+
+### [T-019] Import System Enhancements
+- **Concept:** ปรับปรุงระบบ Import ให้ครบถ้วนและ User-friendly
+- **Requirements:**
+  1. [ ] **Templates:** เพิ่มปุ่ม Download Template สำหรับทุกหัวข้อ (Attendance, Leave, Warning, Employee Master).
+  2. [ ] **Master Data Import:** เพิ่มเมนูสำหรับนำเข้าไฟล์รายชื่อพนักงาน (`employees.csv`).
+  3. [ ] **Upsert Logic:** การนำเข้าพนักงานต้องเป็นการ Update ข้อมูลเดิม (ถ้ามี) หรือ Create ใหม่ (ถ้าไม่มี) โดยไม่ลบประวัติเก่า.
+- **Confirm Task:**
+  - [x] มีปุ่มโหลด Template ครบทุกอัน
+  - [x] Import รายชื่อพนักงานได้
+  - [x] ข้อมูลเก่าไม่หายเมื่อ Import ซ้ำ
 
 ### [T-006] Scoring Safety Mechanism
 - **Concept:** ป้องกัน Error จากสูตรคำนวณเมื่อหัวข้อประเมินเปลี่ยน (Scoring Integrity)

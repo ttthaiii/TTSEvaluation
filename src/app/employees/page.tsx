@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, getDocs, addDoc, writeBatch, doc, query, where, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, serverTimestamp, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Employee } from '../../types/employee';
 import * as XLSX from 'xlsx';
@@ -353,7 +353,7 @@ export default function EmployeeListPage() {
 
 // --- ImportModal Component ---
 function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-    const [fileType, setFileType] = useState<'attendance' | 'leave' | 'warning' | 'score'>('attendance');
+    const [fileType, setFileType] = useState<'users' | 'attendance' | 'leave' | 'warning' | 'score'>('attendance');
     const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
     const [selectedScoreItem, setSelectedScoreItem] = useState<string>('');
     const [scoreItems, setScoreItems] = useState<any[]>([]);
@@ -446,37 +446,85 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
         }
     };
 
-    const downloadTemplate = async () => {
+    const downloadTemplate = () => {
+        let fileName = "";
+        let url = "";
+
+        switch (fileType) {
+            case 'users':
+                fileName = "DB_พนักงาน.xls";
+                url = "/templates/DB_พนักงาน.xls";
+                break;
+            case 'attendance':
+                fileName = "DB_ขาดสาย.xlsx";
+                url = "/templates/DB_ขาดสาย.xlsx";
+                break;
+            case 'leave':
+                fileName = "DB_การลา.xlsx";
+                url = "/templates/DB_การลา.xlsx";
+                break;
+            case 'warning':
+                fileName = "DB_ใบเตือน.xlsx";
+                url = "/templates/DB_ใบเตือน.xlsx";
+                break;
+            case 'score':
+                // Score template is dynamic based on category, so keep generation
+                generateScoreTemplate();
+                return;
+        }
+
+        if (url) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
+    const generateUserTemplate = () => {
+        const templateData = [{
+            "EmployeeID": "EMP-001",
+            "FirstName": "John",
+            "LastName": "Doe",
+            "Position": "Engineer",
+            "Section": "IT",
+            "Department": "Tech",
+            "Level": "L1",
+            "StartDate": "2024-01-01",
+            "EvaluatorID": "EMP-999"
+        }];
+        const ws = XLSX.utils.json_to_sheet(templateData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Template");
+        XLSX.writeFile(wb, "Template_Master_Employee.xlsx");
+    };
+
+    const generateScoreTemplate = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Users (ดึงข้อมูลพนักงานทั้งหมด)
             const usersSnapshot = await getDocs(collection(db, 'users'));
             const data: any[] = [];
             usersSnapshot.forEach(doc => {
                 const d = doc.data();
-                if (d.isActive !== false) { // เอาเฉพาะพนักงานที่ยัง Active (Active employees only)
+                if (d.isActive !== false) {
                     data.push({
                         "EmployeeID": d.employeeId || "",
                         "Name": `${d.firstName} ${d.lastName}`,
-                        "Score": "" // ช่องว่างให้กรอก (Empty column for scores)
+                        "Score": ""
                     });
                 }
             });
-
-            // 2. Sort by ID (เรียงตามรหัสพนักงาน)
             data.sort((a, b) => a.EmployeeID.localeCompare(b.EmployeeID));
 
-            // 3. Create Excel
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Scores");
-
-            // 4. Download
             XLSX.writeFile(wb, `Template_Score_${selectedScoreItem || 'General'}.xlsx`);
-
         } catch (error) {
-            console.error("Error downloading template:", error);
-            alert("ดาวน์โหลด Template ไม่สำเร็จ");
+            console.error("Error generating score template:", error);
+            alert("เกิดข้อผิดพลาดในการสร้าง Template");
         } finally {
             setLoading(false);
         }
@@ -507,7 +555,93 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 return;
             }
 
-            if (fileType === 'score') {
+            if (fileType === 'users') {
+                // --- Master Data Import Logic (Upsert) - Matching migrate.js ---
+                // Mapping: migrate.js uses specific Thai column names. We should support them.
+                const findCol = (keywords: string[]) => headerStr.findIndex(h => keywords.some(k => h.includes(k) || h === k));
+
+                const firstNameIdx = findCol(["ชื่อไทย", "FirstName", "ชื่อ"]);
+                const lastNameIdx = findCol(["นามสกุลไทย", "LastName", "นามสกุล"]);
+                const positionIdx = findCol(["ชื่อตำแหน่ง", "Position", "ตำแหน่ง"]);
+                const sectionIdx = findCol(["ชื่อส่วน", "Section", "สังกัด"]);
+                const deptIdx = findCol(["ชื่อแผนก", "Department", "แผนก"]);
+                const levelIdx = findCol(["Level", "ระดับ"]);
+                const startIdx = findCol(["วันที่เริ่มงาน", "StartDate", "เริ่มงาน"]);
+                const evalIdIdx = findCol(["รหัสผู้ประเมิน", "EvaluatorID"]);
+                const evalNameIdx = findCol(["ผู้ประเมิน", "EvaluatorName"]);
+                const pdNoIdx = findCol(["PDnumber", "PDNumber"]);
+
+                // Helper for Date Parsing (DD/MM/YYYY to Firestore Timestamp)
+                const parseDate = (dateStr: any) => {
+                    if (!dateStr || typeof dateStr !== 'string') return null;
+                    try {
+                        const parts = dateStr.trim().split('/');
+                        if (parts.length !== 3) return null;
+
+                        // Handle formatting (Thai months or numeric) - Simplified for DD/MM/YYYY
+                        // Attempt standard parse first
+                        // If implementing migrate.js strict month Map:
+                        const MONTH_MAP: any = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
+                        let day = parseInt(parts[0]);
+                        let monthStr = parts[1].trim();
+                        let year = parseInt(parts[2]);
+
+                        let month = MONTH_MAP[monthStr];
+                        if (month === undefined) month = parseInt(monthStr) - 1; // Try numeric month
+
+                        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                            return Timestamp.fromDate(new Date(year, month, day));
+                        }
+                        return null;
+                    } catch (e) { return null; }
+                };
+
+                for (const row of tableRows) {
+                    const empId = String(row[empIdIndex]).trim();
+                    if (!empId) continue;
+
+                    const existingDocId = employeeMap.get(empId);
+
+                    // Map Data
+                    const userData: any = {
+                        employeeId: empId,
+                        updatedAt: serverTimestamp(),
+                        // Default Role if new
+                        role: 'user',
+                        isActive: true
+                    };
+
+                    if (firstNameIdx !== -1) userData.firstName = String(row[firstNameIdx] || '').trim();
+                    if (lastNameIdx !== -1) userData.lastName = String(row[lastNameIdx] || '').trim();
+                    if (positionIdx !== -1) userData.position = String(row[positionIdx] || '').trim();
+                    if (sectionIdx !== -1) userData.section = String(row[sectionIdx] || '').trim();
+                    if (deptIdx !== -1) userData.department = String(row[deptIdx] || '').trim();
+                    if (levelIdx !== -1) userData.level = String(row[levelIdx] || '').trim();
+                    if (pdNoIdx !== -1) userData.pdNumber = String(row[pdNoIdx] || '').trim();
+
+                    if (evalIdIdx !== -1) userData.evaluatorId = String(row[evalIdIdx] || '').trim();
+                    if (evalNameIdx !== -1) userData.evaluatorName = String(row[evalNameIdx] || '').trim();
+
+                    if (startIdx !== -1) {
+                        const dateVal = parseDate(row[startIdx]);
+                        if (dateVal) userData.startDate = dateVal;
+                    }
+
+                    if (existingDocId) {
+                        // UPDATE
+                        const userRef = doc(db, 'users', existingDocId);
+                        batch.set(userRef, userData, { merge: true }); // Use merge for safety
+                    } else {
+                        // CREATE
+                        const newRef = doc(collection(db, 'users'));
+                        userData.createdAt = serverTimestamp();
+                        userData.password = empId; // Default password
+                        batch.set(newRef, userData);
+                    }
+                    updateCount++;
+                }
+
+            } else if (fileType === 'score') {
                 if (!selectedScoreItem) { alert("กรุณาเลือกหัวข้อคะแนน"); setLoading(false); return; }
 
                 const scoreIndex = headerStr.findIndex(h => h.includes("Score") || h.includes("คะแนน"));
@@ -695,6 +829,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                     onChange={(e) => setFileType(e.target.value as any)}
                                     className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                                 >
+                                    <option value="users">0. ฐานข้อมูลพนักงาน (Master Employee Data)</option>
                                     <option value="attendance">1. ขาด/ลา/มาสาย (DB_ขาดสาย)</option>
                                     <option value="leave">2. สิทธิ์การลาคงเหลือ (DB_การลา)</option>
                                     <option value="warning">3. ใบเตือน/ความผิด (DB_ใบเตือน)</option>
@@ -702,27 +837,37 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                 </select>
                             </div>
 
+                            {/* Template Download Button (Visible for all types now) */}
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <p className="text-sm font-bold text-gray-700 mb-2">📥 ดาวน์โหลดแบบฟอร์ม (Template)</p>
+                                {fileType === 'score' && (
+                                    <div className="mb-2">
+                                        <label className="text-xs text-gray-500 block mb-1">เลือกหัวข้อคะแนน:</label>
+                                        <select
+                                            value={selectedScoreItem}
+                                            onChange={e => setSelectedScoreItem(e.target.value)}
+                                            className="w-full p-2 border rounded text-xs"
+                                        >
+                                            {scoreItems.map(item => (
+                                                <option key={item.id} value={item.id}>
+                                                    [{item.id}] {item.title} ({item.category})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                <button
+                                    onClick={downloadTemplate}
+                                    className="w-full py-2 bg-white border border-blue-300 text-blue-600 rounded hover:bg-blue-50 text-sm font-bold flex items-center justify-center gap-2"
+                                >
+                                    ดาวน์โหลด Template (.xlsx)
+                                </button>
+                            </div>
+
                             {fileType === 'score' && (
                                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                    <label className="block text-sm font-bold text-blue-800 mb-2">🎯 เลือกหัวข้อที่จะนำเข้าคะแนน</label>
-                                    <select
-                                        value={selectedScoreItem}
-                                        onChange={e => setSelectedScoreItem(e.target.value)}
-                                        className="w-full p-2 border rounded mb-3"
-                                    >
-                                        {scoreItems.map(item => (
-                                            <option key={item.id} value={item.id}>
-                                                [{item.id}] {item.title} ({item.category})
-                                            </option>
-                                        ))}
-                                    </select>
-
-                                    <button
-                                        onClick={downloadTemplate}
-                                        className="w-full py-2 bg-white border border-blue-300 text-blue-600 rounded hover:bg-blue-50 text-sm font-bold flex items-center justify-center gap-2"
-                                    >
-                                        📥 ดาวน์โหลด Template สำหรับกรอกคะแนน
-                                    </button>
+                                    <label className="block text-sm font-bold text-blue-800 mb-2">🎯 นำเข้าคะแนน</label>
+                                    <p className="text-xs text-blue-600 mb-2">กรุณาเลือกหัวข้อคะแนนด้านบนก่อนอัปโหลดไฟล์</p>
                                 </div>
                             )}
 
