@@ -4,9 +4,10 @@ import { DashboardItem } from '@/types/dashboard';
 
 interface SectionStackChartProps {
     data: DashboardItem[];
+    onSectionClick?: (section: string) => void;
 }
 
-export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data }) => {
+export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data, onSectionClick }) => {
     const chartData = useMemo(() => {
         // Group by Section
         const secMap: Record<string, Record<string, number>> = {};
@@ -37,10 +38,15 @@ export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data }) =>
 
     return (
         <div className="h-[250px] w-full">
+            <style>{`
+                .recharts-wrapper *:focus { outline: none !important; }
+                .recharts-bar-rectangle:focus, .recharts-bar:focus { outline: none !important; }
+            `}</style>
             <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                     data={chartData}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    className="cursor-pointer outline-none"
                 >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" />
@@ -48,7 +54,15 @@ export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data }) =>
                     <Tooltip />
                     <Legend />
                     {gradeKeys.map(key => (
-                        <Bar key={key} dataKey={key} stackId="a" fill={COLORS[key]} />
+                        <Bar
+                            key={key}
+                            dataKey={key}
+                            stackId="a"
+                            fill={COLORS[key]}
+                            onClick={(data) => onSectionClick && onSectionClick(data.name as string)}
+                            isAnimationActive={false}
+                            className="outline-none focus:outline-none"
+                        />
                     ))}
                 </BarChart>
             </ResponsiveContainer>

@@ -4,9 +4,10 @@ import { DashboardItem } from '@/types/dashboard';
 
 interface GradeDistributionChartProps {
     data: DashboardItem[];
+    onGradeClick?: (grade: string) => void;
 }
 
-export const GradeDistributionChart: React.FC<GradeDistributionChartProps> = ({ data }) => {
+export const GradeDistributionChart: React.FC<GradeDistributionChartProps> = ({ data, onGradeClick }) => {
     const chartData = useMemo(() => {
         const counts: Record<string, number> = { 'NI': 0, 'BE': 0, 'ME': 0, 'OE': 0, 'E': 0 };
         data.forEach(item => {
@@ -29,18 +30,29 @@ export const GradeDistributionChart: React.FC<GradeDistributionChartProps> = ({ 
 
     return (
         <div className="h-[300px] w-full">
+            <style>{`
+                .recharts-wrapper *:focus { outline: none !important; }
+                .recharts-bar-rectangle:focus, .recharts-bar:focus { outline: none !important; }
+            `}</style>
             <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                     data={chartData}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    className="cursor-pointer outline-none"
                 >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" />
                     <YAxis allowDecimals={false} />
                     <Tooltip cursor={{ fill: 'transparent' }} />
-                    <Bar dataKey="value" barSize={60}>
+                    <Bar
+                        dataKey="value"
+                        barSize={60}
+                        onClick={(data) => onGradeClick && onGradeClick(data.name as string)}
+                        isAnimationActive={false}
+                        className="outline-none focus:outline-none"
+                    >
                         {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[entry.name] || '#ccc'} />
+                            <Cell key={`cell-${index}`} fill={COLORS[entry.name] || '#ccc'} cursor="pointer" className="hover:opacity-80 transition-opacity outline-none focus:outline-none" />
                         ))}
                         <LabelList dataKey="value" position="top" />
                     </Bar>

@@ -68,7 +68,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                         <input
                             type="text"
-                            placeholder="เท่ากับ      ป้อนค่า"
+                            placeholder="ป้อนค่า"
                             value={searchTerm}
                             onChange={(e) => onSearchChange(e.target.value)}
                             className="rounded border border-slate-300 pl-9 pr-3 py-2 text-sm focus:border-indigo-500 focus:outline-none w-full md:min-w-[200px]"

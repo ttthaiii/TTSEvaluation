@@ -62,6 +62,18 @@ export default function DashboardPage() {
         });
     }, [dashboardData, selectedSection, selectedGrade, selectedEmployeeId]);
 
+    const handleGradeClick = (grade: string) => {
+        setSelectedGrade(prev => prev === grade ? 'All' : grade);
+    };
+
+    const handleSectionClick = (section: string) => {
+        setSelectedSection(prev => prev === section ? 'All' : section);
+    };
+
+    const handleRowClick = (empId: string) => {
+        setSelectedEmployeeId(prev => prev === empId ? '' : empId);
+    };
+
     if (loading) {
         return (
             <div className="flex h-screen w-full items-center justify-center">
@@ -96,17 +108,17 @@ export default function DashboardPage() {
                 {/* Row 1: Donut & Stacked Bar */}
                 <div className="rounded-lg bg-white p-4 shadow lg:col-span-1">
                     <h3 className="mb-4 text-lg font-semibold text-slate-700">จำนวนพนักงานแยกตามผลการประเมิน</h3>
-                    <GradeDonutChart data={filteredData} />
+                    <GradeDonutChart data={filteredData} onGradeClick={handleGradeClick} />
                 </div>
                 <div className="rounded-lg bg-white p-4 shadow lg:col-span-2">
                     <h3 className="mb-4 text-lg font-semibold text-slate-700">จำนวนพนักงานแยกเกรด ตามส่วนงานต่างๆ</h3>
-                    <SectionStackChart data={filteredData} />
+                    <SectionStackChart data={filteredData} onSectionClick={handleSectionClick} />
                 </div>
 
                 {/* Row 2: Distribution & Radar (Adjusted layout) */}
                 <div className="rounded-lg bg-white p-4 shadow lg:col-span-2">
                     <h3 className="mb-4 text-lg font-semibold text-slate-700">แจกแจงการกระจายตัวผลการประเมิน</h3>
-                    <GradeDistributionChart data={filteredData} />
+                    <GradeDistributionChart data={filteredData} onGradeClick={handleGradeClick} />
                 </div>
                 <div className="rounded-lg bg-white p-4 shadow lg:col-span-1">
                     <h3 className="mb-4 text-lg font-semibold text-slate-700">ผลการประเมินแยกตามหัวข้อ</h3>
@@ -119,7 +131,11 @@ export default function DashboardPage() {
                 <div className="border-b px-6 py-4">
                     <h3 className="text-lg font-semibold text-slate-700">ตารางแสดงรายละเอียดข้อมูล</h3>
                 </div>
-                <EmployeeTable data={filteredData} categories={categories} />
+                <EmployeeTable
+                    data={filteredData}
+                    categories={categories}
+                    onRowClick={handleRowClick}
+                />
             </div>
         </div>
     );

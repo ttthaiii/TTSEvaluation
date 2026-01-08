@@ -4,9 +4,10 @@ import { DashboardItem } from '@/types/dashboard';
 
 interface GradeDonutChartProps {
     data: DashboardItem[];
+    onGradeClick?: (grade: string) => void;
 }
 
-export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data }) => {
+export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data, onGradeClick }) => {
     const chartData = useMemo(() => {
         const counts: Record<string, number> = {};
         data.forEach(item => {
@@ -33,6 +34,9 @@ export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data }) => {
 
     return (
         <div className="h-[250px] w-full relative">
+            <style>{`
+                .recharts-sector:focus, .recharts-pie:focus, path:focus { outline: none !important; }
+            `}</style>
             <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                     <Pie
@@ -43,9 +47,12 @@ export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data }) => {
                         outerRadius={90}
                         paddingAngle={0}
                         dataKey="value"
+                        onClick={(data) => onGradeClick && onGradeClick(data.name)}
+                        className="cursor-pointer outline-none focus:outline-none"
+                        isAnimationActive={false}
                     >
                         {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[entry.name] || '#8884d8'} stroke="none" />
+                            <Cell key={`cell-${index}`} fill={COLORS[entry.name] || '#8884d8'} stroke="none" className="hover:opacity-80 transition-opacity" cursor="pointer" />
                         ))}
                     </Pie>
                     <Tooltip itemStyle={{ color: '#000' }} />
