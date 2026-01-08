@@ -72,6 +72,26 @@
   - [x] Dropdown ใช้งานได้ (Hover/Click)
   - [x] Links นำทางถูกต้อง
 
+### [T-018] Employee Management Enhancements
+- **Concept:** ปรับปรุงหน้าจัดการพนักงานให้ค้นหา/แก้ไขข้อมูลได้ง่ายขึ้น
+- **Principle:** Comprehensive Admin Dashboard
+- **Implementation Detail:**
+  1. **Filters & Search:** 
+     - Add Text Search (Name/ID).
+     - Add Section Filter.
+     - Add "Evaluator" Filter (Show only users who have subordinates).
+  2. **Employee Edit Modal:**
+     - Tab 1: General Info (ReadOnly for now/Base info).
+     - Tab 2: Yearly Stats (Editable: Late/Absent/Sick).
+     - Tab 3: Credentials (Set custom password).
+  3. **Auth Update:** Update `auth.ts` to check custom password if set. And allow login by Custom Username.
+- **Confirm Task:**
+  - [x] Search & Filter ใช้งานได้จริง
+  - [x] แก้ไขข้อมูล Yearly Stats และบันทึกลง Firestore ได้
+  - [x] ตั้งรหัสผ่านใหม่และ Login ด้วยรหัสใหม่ได้
+  - [x] ตั้ง Username ใหม่และ Login ได้
+  - [x] Links นำทางถูกต้อง
+
 ### [T-006] Scoring Safety Mechanism
 - **Concept:** ป้องกัน Error จากสูตรคำนวณเมื่อหัวข้อประเมินเปลี่ยน (Scoring Integrity)
 - **Principle:** Dynamic Validation

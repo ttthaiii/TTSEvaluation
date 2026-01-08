@@ -28,10 +28,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         }
                     }
 
-                    // 1. Query User by Employee ID
+                    // 1. Query User (Check Employee ID OR Username)
                     const usersRef = collection(db, "users")
-                    const q = query(usersRef, where("employeeId", "==", credentials.username))
-                    const querySnapshot = await getDocs(q)
+
+                    // A. Try Employee ID first
+                    let q = query(usersRef, where("employeeId", "==", credentials.username))
+                    let querySnapshot = await getDocs(q)
+
+                    if (querySnapshot.empty) {
+                        // B. Try Custom Username if ID not found
+                        q = query(usersRef, where("username", "==", credentials.username))
+                        querySnapshot = await getDocs(q)
+                    }
 
                     if (querySnapshot.empty) {
                         console.log("❌ User not found")
@@ -41,8 +49,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const userDoc = querySnapshot.docs[0]
                     const userData = userDoc.data()
 
-                    // 2. Validate Password (Simple check: password === employeeId initially)
-                    const isValid = credentials.password === userData.employeeId
+                    // 2. Validate Password
+                    // Priority: 1. Custom Password (in DB)  2. Default (Employee ID)
+                    let isValid = false;
+                    if (userData.password && userData.password.length > 0) {
+                        isValid = credentials.password === userData.password;
+                    } else {
+                        isValid = credentials.password === userData.employeeId;
+                    }
 
                     if (!isValid) {
                         console.log("❌ Invalid password")

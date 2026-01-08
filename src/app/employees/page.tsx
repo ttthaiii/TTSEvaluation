@@ -35,10 +35,25 @@ const parseLeaveTime = (value: any): number => {
     return parseFloat(str) || 0;
 };
 
+import { Search, Filter, Lock, Edit2, Users } from 'lucide-react';
+import EmployeeEditModal from '@/components/admin/EmployeeEditModal';
+
+// ... (keep previous Helper Functions)
+
 export default function EmployeeListPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+    // 👇 State for Filtering & Search
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedSection, setSelectedSection] = useState('All');
+    const [showEvaluatorsOnly, setShowEvaluatorsOnly] = useState(false);
+    const [sections, setSections] = useState<string[]>([]);
+
+    // 👇 State for Edit Modal
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [selectedEmployee, setSelectedEmployee] = useState<{ id: string, name: string } | null>(null);
 
     // ดึงปีปัจจุบันมาแสดงในหัวตาราง
     const currentEvalYear = getEvaluationYear ? getEvaluationYear() : new Date().getFullYear();
@@ -51,29 +66,42 @@ export default function EmployeeListPage() {
             // 1. ดึง Users ทั้งหมด
             const usersQuery = await getDocs(collection(db, 'users'));
 
-            // 2. ดึง Evaluations ของรอบปัจจุบัน (เพื่อให้ได้คะแนนล่าสุด)
+            // 2. ดึง Evaluations ของรอบปัจจุบัน
             const currentPeriod = getCurrentPeriod ? getCurrentPeriod() : `${currentEvalYear}-Annual`;
             const evalsQuery = query(collection(db, 'evaluations'), where('period', '==', currentPeriod));
             const evalsSnapshot = await getDocs(evalsQuery);
 
-            // สร้าง Map เก็บคะแนน: Key = employeeDocId, Value = disciplineScore
             const scoreMap = new Map<string, any>();
             evalsSnapshot.forEach(doc => {
                 const d = doc.data();
-                // เก็บ totalScore (คะแนนรวมล่าสุด) ถ้าไม่มีให้ใช้ disciplineScore
                 const finalScore = d.totalScore !== undefined ? d.totalScore : d.disciplineScore;
                 scoreMap.set(d.employeeDocId, finalScore);
             });
 
-            const data: Employee[] = [];
+            // Build temporary evaluation set for quick lookup of "who is an evaluator"
+            // Actually, we need to check 'evaluatorId' in all users to determine IS_EVALUATOR status
+            // BUT, wait. A user IS an evaluator if ANYONE else has them as their evaluatorId.
+            // So we need to process the whole list first.
+
+            const allUsersData: any[] = [];
+            const evaluatorIds = new Set<string>();
+            const sectionSet = new Set<string>();
+
             usersQuery.forEach((doc) => {
                 const d = doc.data();
+                allUsersData.push({ id: doc.id, ...d });
+                if (d.section) sectionSet.add(d.section);
+                if (d.evaluatorId) evaluatorIds.add(d.evaluatorId);
+            });
 
-                // ดึงคะแนนจาก Map
-                const evalScore = scoreMap.get(doc.id);
+            setSections(Array.from(sectionSet).sort());
 
-                data.push({
-                    id: doc.id,
+            const data: Employee[] = allUsersData.map(d => {
+                const isEvaluator = evaluatorIds.has(d.employeeId);
+                const evalScore = scoreMap.get(d.id);
+
+                return {
+                    id: d.id,
                     employeeId: d.employeeId || "",
                     firstName: d.firstName || "",
                     lastName: d.lastName || "",
@@ -81,16 +109,16 @@ export default function EmployeeListPage() {
                     department: d.department || "",
                     section: d.section || "",
                     level: d.level || "",
+                    evaluatorName: d.evaluatorName || "",
                     startDate: d.startDate,
                     isActive: d.isActive ?? true,
-                    // Snapshot ข้อมูลขาดลามาสาย
                     totalLateMinutes: d.totalLateMinutes || 0,
                     totalSickLeaveDays: d.totalSickLeaveDays || 0,
                     warningCount: d.warningCount || 0,
                     totalAbsentDays: d.totalAbsentDays || 0,
-                    // 👇 ใส่คะแนนประเมินเข้าไปใน Object (ต้องแก้ Type Employee หรือ cast as any ก็ได้)
-                    evaluationScore: evalScore !== undefined ? evalScore : null
-                } as any);
+                    evaluationScore: evalScore !== undefined ? evalScore : null,
+                    isEvaluator: isEvaluator // Extra Field for Logic
+                } as any;
             });
 
             setEmployees(data);
@@ -120,79 +148,178 @@ export default function EmployeeListPage() {
         fetchEmployees();
     }, []);
 
+    const handleEditClick = (emp: Employee) => {
+        setSelectedEmployee({ id: emp.id, name: `${emp.firstName} ${emp.lastName}` });
+        setEditModalOpen(true);
+    };
+
+    // --- Filtering Logic ---
+    const filteredEmployees = employees.filter(emp => {
+        const matchesSearch =
+            emp.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            emp.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesSection = selectedSection === 'All' || emp.section === selectedSection;
+
+        const matchesEvaluator = showEvaluatorsOnly ? (emp as any).isEvaluator : true;
+
+        return matchesSearch && matchesSection && matchesEvaluator;
+    });
+
     if (loading) return <div className="p-10 text-center text-blue-600">⏳ กำลังโหลดข้อมูล...</div>;
 
     return (
-        <div className="p-10">
+        <div className="p-10 bg-gray-50 min-h-screen">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">รายชื่อพนักงาน ({employees.length})</h1>
-                    <p className="text-gray-500 text-sm mt-1">จัดการฐานข้อมูลพนักงานทั้งหมด</p>
+                    <h1 className="text-2xl font-bold text-gray-800">จัดการพนักงาน ({filteredEmployees.length} คน)</h1>
+                    <p className="text-gray-500 text-sm mt-1">ฐานข้อมูลพนักงานและสิทธิ์การใช้งาน</p>
                 </div>
                 <div className="flex gap-3">
                     <button
                         onClick={() => setIsImportModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded shadow hover:bg-green-700 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg shadow hover:bg-green-700 transition-colors"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                         </svg>
                         นำเข้าข้อมูล (Excel)
                     </button>
-                    <button onClick={addTestUser} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded shadow transition-colors">
-                        + ทดสอบเพิ่มข้อมูล
-                    </button>
+                    {/* <button onClick={addTestUser} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded shadow transition-colors">
+                        + ทดสอบ
+                    </button> */}
+                </div>
+            </div>
+
+            {/* 👇 Filter & Search Bar */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col lg:flex-row gap-4 justify-between items-end lg:items-center">
+                <div className="flex flex-col md:flex-row gap-4 w-full lg:w-auto">
+                    {/* Search */}
+                    <div className="relative w-full md:w-64">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="ค้นหาชื่อ หรือ รหัสพนักงาน..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="pl-10 w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        />
+                    </div>
+
+                    {/* Section Filter */}
+                    <div className="w-full md:w-48">
+                        <select
+                            value={selectedSection}
+                            onChange={e => setSelectedSection(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                        >
+                            <option value="All">ทุกสังกัด / แผนก</option>
+                            {sections.map(sec => <option key={sec} value={sec}>{sec}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                {/* Toggle Filter */}
+                <div className="flex items-center gap-2">
+                    <label className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition select-none border ${showEvaluatorsOnly ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                        <input
+                            type="checkbox"
+                            checked={showEvaluatorsOnly}
+                            onChange={e => setShowEvaluatorsOnly(e.target.checked)}
+                            className="hidden" // Custom UI
+                        />
+                        <Users className="w-5 h-5" />
+                        <span>แสดงเฉพาะรายชื่อผู้ประเมิน</span>
+                    </label>
                 </div>
             </div>
 
             {/* ตารางแสดงผล */}
-            <div className="overflow-x-auto shadow-md rounded-lg">
-                <table className="min-w-full bg-white border border-gray-200">
-                    <thead className="bg-gray-100">
+            <div className="overflow-hidden shadow-lg rounded-xl border border-gray-200 bg-white">
+                <table className="min-w-full">
+                    <thead className="bg-gray-100 border-b border-gray-200">
                         <tr>
-                            <th className="border-b p-4 text-left font-semibold text-gray-600">รหัส</th>
-                            <th className="border-b p-4 text-left font-semibold text-gray-600">ชื่อ-นามสกุล</th>
-                            <th className="border-b p-4 text-left font-semibold text-gray-600">มาสาย (นาที)</th>
-                            <th className="border-b p-4 text-left font-semibold text-gray-600">ลาป่วย (วัน)</th>
-                            <th className="border-b p-4 text-left font-semibold text-gray-600">ขาดงาน (วัน)</th>
-                            <th className="border-b p-4 text-left font-semibold text-gray-600">ใบเตือน</th>
-                            {/* 👇 เพิ่มหัวตารางคะแนน */}
-                            <th className="border-b p-4 text-center font-bold text-[#ff5722] bg-orange-50">
+                            <th className="p-4 text-left font-semibold text-gray-600 uppercase text-sm tracking-wider">พนักงาน</th>
+                            <th className="p-4 text-left font-semibold text-gray-600 uppercase text-sm tracking-wider hidden md:table-cell">สังกัด</th>
+                            <th className="p-4 text-center font-semibold text-gray-600 uppercase text-sm tracking-wider">มาสาย/ลา/ขาด</th>
+                            <th className="p-4 text-center font-semibold text-gray-600 uppercase text-sm tracking-wider">ใบเตือน</th>
+                            <th className="p-4 text-center font-bold text-orange-600 bg-orange-50/50 uppercase text-sm tracking-wider">
                                 คะแนนปี {currentEvalYear}
                             </th>
+                            <th className="p-4 text-center font-semibold text-gray-600 uppercase text-sm tracking-wider">จัดการ</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {employees.length === 0 ? (
-                            <tr><td colSpan={7} className="p-10 text-center text-gray-500">ไม่พบข้อมูลพนักงาน</td></tr>
+                    <tbody className="divide-y divide-gray-100">
+                        {filteredEmployees.length === 0 ? (
+                            <tr><td colSpan={6} className="p-10 text-center text-gray-400">ไม่พบข้อมูลที่ค้นหา</td></tr>
                         ) : (
-                            employees.map((emp: any) => (
-                                <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="border-b p-4 text-gray-700">{emp.employeeId}</td>
-                                    <td className="border-b p-4 text-gray-700">{emp.firstName} {emp.lastName}</td>
+                            filteredEmployees.map((emp: any) => (
+                                <tr key={emp.id} className="hover:bg-blue-50/30 transition-colors group">
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm ${emp.isEvaluator ? 'bg-indigo-500' : 'bg-gray-400'}`}>
+                                                {emp.firstName.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-gray-800 flex items-center gap-2">
+                                                    {emp.firstName} {emp.lastName}
+                                                    {emp.isEvaluator && (
+                                                        <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 font-bold uppercase tracking-wide">
+                                                            Evaluator
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-sm text-gray-500 font-mono">{emp.employeeId}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="p-4 text-gray-600 text-sm hidden md:table-cell">
+                                        <div className="font-medium">{emp.section}</div>
+                                        <div className="text-xs text-gray-400">{emp.position}</div>
+                                    </td>
 
-                                    <td className={`border-b p-4 font-mono ${emp.totalLateMinutes > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
-                                        {emp.totalLateMinutes > 0 ? emp.totalLateMinutes : '-'}
-                                    </td>
-                                    <td className={`border-b p-4 font-mono ${emp.totalSickLeaveDays > 0 ? 'text-orange-600 font-bold' : 'text-gray-400'}`}>
-                                        {emp.totalSickLeaveDays > 0 ? emp.totalSickLeaveDays : '-'}
-                                    </td>
-                                    <td className={`border-b p-4 font-mono ${emp.totalAbsentDays > 0 ? 'text-red-800 font-bold' : 'text-gray-400'}`}>
-                                        {emp.totalAbsentDays > 0 ? emp.totalAbsentDays : '-'}
-                                    </td>
-                                    <td className={`border-b p-4 font-mono ${emp.warningCount > 0 ? 'text-red-700 font-bold' : 'text-gray-400'}`}>
-                                        {emp.warningCount > 0 ? emp.warningCount : '-'}
+                                    <td className="p-4 text-center">
+                                        <div className="text-sm space-y-1">
+                                            <div title="มาสาย (นาที)" className={`${emp.totalLateMinutes > 0 ? 'text-red-600 font-bold' : 'text-gray-300'}`}>
+                                                ⏰ {emp.totalLateMinutes > 0 ? `${emp.totalLateMinutes} น.` : '-'}
+                                            </div>
+                                            <div title="ลาป่วย (วัน)" className={`${emp.totalSickLeaveDays > 0 ? 'text-orange-600 font-bold' : 'text-gray-300'}`}>
+                                                🤒 {emp.totalSickLeaveDays > 0 ? `${emp.totalSickLeaveDays} วัน` : '-'}
+                                            </div>
+                                            <div title="ขาดงาน (วัน)" className={`${emp.totalAbsentDays > 0 ? 'text-red-800 font-black' : 'text-gray-300'}`}>
+                                                🚫 {emp.totalAbsentDays > 0 ? `${emp.totalAbsentDays} วัน` : '-'}
+                                            </div>
+                                        </div>
                                     </td>
 
-                                    {/* 👇 แสดงคะแนนประเมิน */}
-                                    <td className="border-b p-4 text-center bg-orange-50/30">
+                                    <td className="p-4 text-center">
+                                        <span className={`inline-block w-8 h-8 leading-8 rounded-full text-sm font-bold ${emp.warningCount > 0 ? 'bg-red-100 text-red-700' : 'text-gray-300 bg-gray-50'}`}>
+                                            {emp.warningCount > 0 ? emp.warningCount : '-'}
+                                        </span>
+                                    </td>
+
+                                    {/* Evaluation Score */}
+                                    <td className="p-4 text-center bg-orange-50/10">
                                         {emp.evaluationScore !== null ? (
-                                            <span className="bg-[#ff5722] text-white px-3 py-1 rounded-full font-bold shadow-sm">
-                                                {emp.evaluationScore}
+                                            <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1 rounded-lg font-bold shadow-sm text-sm">
+                                                {Number(emp.evaluationScore).toFixed(2)}
                                             </span>
                                         ) : (
-                                            <span className="text-gray-300 text-sm italic">รอประเมิน</span>
+                                            <span className="text-gray-300 text-xs italic">รอประเมิน</span>
                                         )}
+                                    </td>
+
+                                    <td className="p-4 text-center">
+                                        <button
+                                            onClick={() => handleEditClick(emp)}
+                                            className="text-gray-400 hover:text-blue-600 transition-colors p-2 rounded-full hover:bg-blue-50"
+                                            title="แก้ไขข้อมูล / ตั้งรหัสผ่าน"
+                                        >
+                                            <Edit2 className="w-5 h-5" />
+                                        </button>
                                     </td>
                                 </tr>
                             ))
@@ -204,9 +331,25 @@ export default function EmployeeListPage() {
             {isImportModalOpen && (
                 <ImportModal onClose={() => setIsImportModalOpen(false)} onSuccess={() => fetchEmployees()} />
             )}
+
+            {editModalOpen && selectedEmployee && (
+                <EmployeeEditModal
+                    isOpen={editModalOpen}
+                    onClose={() => setEditModalOpen(false)}
+                    employeeId={selectedEmployee.id}
+                    employeeName={selectedEmployee.name}
+                    currentYear={Number(currentEvalYear)} // Cast to number just in case
+                    onSaveSuccess={() => {
+                        setEditModalOpen(false);
+                        fetchEmployees();
+                    }}
+                />
+            )}
         </div>
     );
 }
+
+// ... (ImpactModal kept same or removed if separating file, assuming kept below in actual file but here just replacing main)
 
 // --- ImportModal Component ---
 function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
