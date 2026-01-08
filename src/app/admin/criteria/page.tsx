@@ -12,6 +12,7 @@ interface QuestionItem {
     subtitle?: string;
     description?: string;
     maxScore: number; // คะแนนเต็มของข้อนี้ (ปกติ 5)
+    isReadOnly?: boolean; // 🔥 New feature via T-010
 }
 
 interface Category {
@@ -264,9 +265,14 @@ export default function CriteriaManagementPage() {
                                             </div>
                                             <div className="text-right">
                                                 <span className="block text-xs text-gray-400">เต็ม</span>
-                                                <span className="text-xl font-bold text-green-600">{q.maxScore}</span>
+                                                <span className="text-xl font-bold text-green-600 min-w-[30px] inline-block text-right">{q.maxScore}</span>
                                             </div>
                                         </div>
+                                        {q.isReadOnly && (
+                                            <div className="mt-2 inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded border border-yellow-200 font-bold">
+                                                🔒 Read Only (Imported Score)
+                                            </div>
+                                        )}
                                         <div className="mt-3 pt-3 border-t flex justify-end gap-3">
                                             <button onClick={() => setEditingQuestion(q)} className="text-sm text-blue-600 hover:underline">แก้ไข</button>
                                             <button onClick={() => deleteQuestion(q.id)} className="text-sm text-red-500 hover:underline">ลบ</button>
@@ -328,6 +334,21 @@ export default function CriteriaManagementPage() {
                             <label className="text-xs font-bold text-gray-500">รายละเอียดเกณฑ์ (Description)</label>
                             <textarea rows={4} className="border w-full p-2 rounded" value={editingQuestion.description || ''} onChange={e => setEditingQuestion({ ...editingQuestion, description: e.target.value })} placeholder="ก. ... ; ข. ..." />
                         </div>
+
+                        {/* 🔥 New Option: Read Only */}
+                        <div className="flex items-center gap-2 bg-yellow-50 p-2 rounded border border-yellow-200">
+                            <input
+                                type="checkbox"
+                                id="isReadOnly"
+                                checked={editingQuestion.isReadOnly || false}
+                                onChange={e => setEditingQuestion({ ...editingQuestion, isReadOnly: e.target.checked })}
+                            />
+                            <label htmlFor="isReadOnly" className="text-sm font-bold text-gray-700 cursor-pointer">
+                                Read Only (แสดงคะแนนดิบ)
+                            </label>
+                        </div>
+                        <p className="text-xs text-gray-500">* สำหรับหัวข้อที่นำเข้าคะแนนจาก Excel เท่านั้น (เช่น AI Score)</p>
+
                         <div className="flex justify-end gap-2">
                             <button onClick={() => setEditingQuestion(null)} className="px-3 py-1 bg-gray-200 rounded">ยกเลิก</button>
                             <button onClick={saveQuestion} className="px-3 py-1 bg-blue-600 text-white rounded">บันทึก</button>

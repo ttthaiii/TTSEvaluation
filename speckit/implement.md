@@ -96,4 +96,14 @@
 
 ---
 
-**เมื่อพร้อมแล้ว ให้เริ่มดำเนินการตาม Step 2.1 ได้เลย**
+
+#### [MODIFY] [useEvaluation.ts](src/hooks/useEvaluation.ts)
+- **Fix:** Inject `Employee` context (Level/Section) into math engine.
+- **Fix:** Sanitized variable names (handle brackets `[O_1]` vs `O_1`).
+- **Fix:** Support `TOTAL_SCORE` and `DISCIPLINE_SCORE` named rules.
+- **Fix:** Force cast `stats` (Late/Sick/Absent) to Number to prevent string errors.
+- **Fix:** Strip brackets from formulas before `math.evaluate` to prevent Matrix results.
+- **Fix:** Apply sanitization to **both** calculation loops (Loop 1 and Loop 2) to ensure dependencies resolve correctly.
+- **Fix:** Implemented **Overwrite Protection** for `DISCIPLINE_SCORE`. If found by name, it takes priority and blocks subsequent rules (like `TOTAL_SCORE`) from overwriting it via `targetField`.
+- **Fix:** Implemented **Variable Substitution** for Thai variable names. Replaced `[ThaiName]` with `(Value)` before evaluation to bypass `math.js` parser limitations.
+- **Fix:** Implemented **Multi-Pass Calculation** (2 passes) for variables to resolve dependency order issues (e.g., Summation depending on Component variables).

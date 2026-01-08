@@ -1,21 +1,26 @@
 # Specifications (ข้อกำหนด)
 
 ## Feature: [F-001] Data Import Management (ระบบนำเข้าข้อมูล)
-**Status:** Implemented (Basic)
+**Status:** Implemented (Enhanced)
 
 ### 1. User Flow
-1. **Access:** Admin เข้าสู่หน้า `/admin/import`
-2. **Selection:** เลือก Tab ประเภทข้อมูล (Time Attendance / Leaves / Warnings)
-3. **Upload:** เลือกไฟล์ Excel/CSV จากเครื่อง
-4. **Preview:** ระบบ Parse ไฟล์ด้วย `xlsx`/`csv-parser` และแสดงตัวอย่างข้อมูลในตาราง
-5. **Validation:** ตรวจสอบความถูกต้องเบื้องต้น (เช่น Header ต้องตรงตาม Format)
-6. **Submit:** กดปุ่ม "Upload" เพื่อบันทึกข้อมูลโควตาลง Firestore (Batch Write)
+1. **Access:** Admin เข้าสู่หน้า `/employees` (Employee List) -> คลิก "นำเข้าข้อมูล"
+2. **Selection:**
+   - เลือก Tab ประเภทข้อมูล:
+     1. Time Attendance (ขาด/ลา/มาสาย)
+     2. Leaves (สิทธิ์การลา)
+     3. Warnings (ใบเตือน)
+     4. **Evaluation Score (คะแนนรายหัวข้อ - New)**
+3. **Template:** (สำหรับ Evaluation Score) ดาวน์โหลด Template Excel ที่มีรายชื่อพนักงานปัจจุบัน
+4. **Upload:** เลือกไฟล์ Excel/CSV จากเครื่อง
+5. **Preview:** ระบบ Parse ไฟล์และแสดงตัวอย่างข้อมูล
+6. **Submit:** บันทึกข้อมูลลง Firestore (User Stats หรือ Evaluation Scores)
 
 ### 2. Architecture
-- **Component:** `src/app/admin/import/page.tsx`
+- **Component:** `src/app/employees/page.tsx` (Migrated logic from admin/import)
 - **Logic:** 
-  - Frontend parsing เพื่อลด load server
-  - Mapping column ภาษาไทย -> English Property Name (ตาม `src/types/import-data.ts`)
+  - Frontend parsing reducing server load
+  - Flexible mapping for dynamic score criteria (e.g. `[O-1]`)
 
 ---
 
@@ -53,14 +58,19 @@
    - แสดงรายการย่อย (Sub-items) ของหัวข้อนั้นๆ
    - ผู้ใช้ให้คะแนนรายการย่อย -> ระบบคำนวณค่าเฉลี่ย (Average)
    - กด "ใช้นำคะแนนนี้" -> ค่าเฉลี่ยจะถูกส่งกลับไปเป็นคะแนนของหัวข้อหลัก
-6. **Submission:**
-   - กดปุ่ม "บันทึกการประเมิน"
-   - Confirm Dialog เด้งเตือน
-   - บันทึกข้อมูลลง Collection `evaluations`
+6. **Submission & Completion:**
+   - **Completion Check (✅):** แสดงเครื่องหมายติ๊กถูกหน้าชื่อพนักงานเมื่อ **ประเมินครบทุกข้อที่จำเป็น** (ไม่นับ Read Only).
+   - **Re-evaluation Alert:** หากเลือกพนักงานที่ประเมินครบแล้ว จะแสดง Alert เตือน (Read Only items ไม่ทำให้เกิด Alert).
+   - กดปุ่ม "บันทึกการประเมิน" -> บันทึกข้อมูลลง Collection `evaluations`.
+
+### 2. Scoring Integrity (New Check)
+- **Validation:** ตรวจสอบความถูกต้องของสูตรคำนวณ (`scoring_formulas`) ทุกครั้งที่โหลดหน้า
+- **Warning:** หากพบสูตรที่อ้างถึงตัวแปรที่ไม่มีอยู่จริง (เช่น ถูกลบไปแล้ว หรือพิมพ์ผิด) จะแสดง **Red Warning Banner** ด้านบนทันที
+
 
 ### 2. Architecture
 - **Main Page:** `src/app/evaluations/page.tsx`
-- **Config Data:** `src/data/evaluation-criteria.ts`
+- **Config Data:** `src/data/evaluation-criteria.ts` (Static - Deprecated) & Firestore `evaluation_categories` (Dynamic)
   - เก็บ Structure ของคำถาม, Tooltip text, และ Popup Sub-items
 - **Core Logic:** ฟังก์ชัน `runDisciplineCalculation`
   - Library: `mathjs`
@@ -83,6 +93,8 @@
 1. Admin เข้าหน้า `/admin/criteria`
 2. แสดงรายการเกณฑ์ปัจจุบัน
 3. CRUD (Create/Read/Update/Delete) เกณฑ์การประเมิน
+4. **Dependency Check:** ก่อนลบหัวข้อคำถาม ระบบจะตรวจสอบว่าถูกใช้ใน `scoring_formulas` หรือไม่ ถ้าใช้จะห้ามลบ
+
 
 ---
 

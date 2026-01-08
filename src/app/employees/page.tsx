@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, getDocs, addDoc, writeBatch, doc, query, where } from 'firebase/firestore'; 
+import { collection, getDocs, addDoc, writeBatch, doc, query, where, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Employee } from '../../types/employee';
 import * as XLSX from 'xlsx';
@@ -36,189 +36,215 @@ const parseLeaveTime = (value: any): number => {
 };
 
 export default function EmployeeListPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
-  // ดึงปีปัจจุบันมาแสดงในหัวตาราง
-  const currentEvalYear = getEvaluationYear ? getEvaluationYear() : new Date().getFullYear();
+    // ดึงปีปัจจุบันมาแสดงในหัวตาราง
+    const currentEvalYear = getEvaluationYear ? getEvaluationYear() : new Date().getFullYear();
 
-  // --- Fetch Employees ---
-  const fetchEmployees = async () => {
-    try {
-      setLoading(true);
+    // --- Fetch Employees ---
+    const fetchEmployees = async () => {
+        try {
+            setLoading(true);
 
-      // 1. ดึง Users ทั้งหมด
-      const usersQuery = await getDocs(collection(db, 'users'));
-      
-      // 2. ดึง Evaluations ของรอบปัจจุบัน (เพื่อให้ได้คะแนนล่าสุด)
-      const currentPeriod = getCurrentPeriod ? getCurrentPeriod() : `${currentEvalYear}-Annual`;
-      const evalsQuery = query(collection(db, 'evaluations'), where('period', '==', currentPeriod));
-      const evalsSnapshot = await getDocs(evalsQuery);
+            // 1. ดึง Users ทั้งหมด
+            const usersQuery = await getDocs(collection(db, 'users'));
 
-      // สร้าง Map เก็บคะแนน: Key = employeeDocId, Value = disciplineScore
-      const scoreMap = new Map<string, any>();
-      evalsSnapshot.forEach(doc => {
-          const d = doc.data();
-          // เก็บ disciplineScore (คะแนนรวม) หรือถ้าไม่มีให้เป็น -
-          scoreMap.set(d.employeeDocId, d.disciplineScore);
-      });
+            // 2. ดึง Evaluations ของรอบปัจจุบัน (เพื่อให้ได้คะแนนล่าสุด)
+            const currentPeriod = getCurrentPeriod ? getCurrentPeriod() : `${currentEvalYear}-Annual`;
+            const evalsQuery = query(collection(db, 'evaluations'), where('period', '==', currentPeriod));
+            const evalsSnapshot = await getDocs(evalsQuery);
 
-      const data: Employee[] = [];
-      usersQuery.forEach((doc) => {
-        const d = doc.data();
-        
-        // ดึงคะแนนจาก Map
-        const evalScore = scoreMap.get(doc.id);
+            // สร้าง Map เก็บคะแนน: Key = employeeDocId, Value = disciplineScore
+            const scoreMap = new Map<string, any>();
+            evalsSnapshot.forEach(doc => {
+                const d = doc.data();
+                // เก็บ totalScore (คะแนนรวมล่าสุด) ถ้าไม่มีให้ใช้ disciplineScore
+                const finalScore = d.totalScore !== undefined ? d.totalScore : d.disciplineScore;
+                scoreMap.set(d.employeeDocId, finalScore);
+            });
 
-        data.push({
-          id: doc.id,
-          employeeId: d.employeeId || "",
-          firstName: d.firstName || "",
-          lastName: d.lastName || "",
-          position: d.position || "",
-          department: d.department || "",
-          section: d.section || "",
-          level: d.level || "",
-          startDate: d.startDate,
-          isActive: d.isActive ?? true,
-          // Snapshot ข้อมูลขาดลามาสาย
-          totalLateMinutes: d.totalLateMinutes || 0,
-          totalSickLeaveDays: d.totalSickLeaveDays || 0,
-          warningCount: d.warningCount || 0,
-          totalAbsentDays: d.totalAbsentDays || 0,
-          // 👇 ใส่คะแนนประเมินเข้าไปใน Object (ต้องแก้ Type Employee หรือ cast as any ก็ได้)
-          evaluationScore: evalScore !== undefined ? evalScore : null 
-        } as any);
-      });
+            const data: Employee[] = [];
+            usersQuery.forEach((doc) => {
+                const d = doc.data();
 
-      setEmployees(data);
-    } catch (error) {
-      console.error("❌ Error fetching employees:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+                // ดึงคะแนนจาก Map
+                const evalScore = scoreMap.get(doc.id);
 
-  const addTestUser = async () => {
-    try {
-        const docRef = await addDoc(collection(db, "users"), {
-          firstName: "Test",
-          lastName: "User",
-          isActive: true,
-          employeeId: "TEST-" + Math.floor(Math.random() * 1000)
-        });
-        alert(`เพิ่มข้อมูลสำเร็จ! ID: ${docRef.id}`);
-        fetchEmployees(); 
-      } catch (e) {
-        alert("Error: " + e);
-      }
-  };
+                data.push({
+                    id: doc.id,
+                    employeeId: d.employeeId || "",
+                    firstName: d.firstName || "",
+                    lastName: d.lastName || "",
+                    position: d.position || "",
+                    department: d.department || "",
+                    section: d.section || "",
+                    level: d.level || "",
+                    startDate: d.startDate,
+                    isActive: d.isActive ?? true,
+                    // Snapshot ข้อมูลขาดลามาสาย
+                    totalLateMinutes: d.totalLateMinutes || 0,
+                    totalSickLeaveDays: d.totalSickLeaveDays || 0,
+                    warningCount: d.warningCount || 0,
+                    totalAbsentDays: d.totalAbsentDays || 0,
+                    // 👇 ใส่คะแนนประเมินเข้าไปใน Object (ต้องแก้ Type Employee หรือ cast as any ก็ได้)
+                    evaluationScore: evalScore !== undefined ? evalScore : null
+                } as any);
+            });
 
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
+            setEmployees(data);
+        } catch (error) {
+            console.error("❌ Error fetching employees:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  if (loading) return <div className="p-10 text-center text-blue-600">⏳ กำลังโหลดข้อมูล...</div>;
+    const addTestUser = async () => {
+        try {
+            const docRef = await addDoc(collection(db, "users"), {
+                firstName: "Test",
+                lastName: "User",
+                isActive: true,
+                employeeId: "TEST-" + Math.floor(Math.random() * 1000)
+            });
+            alert(`เพิ่มข้อมูลสำเร็จ! ID: ${docRef.id}`);
+            fetchEmployees();
+        } catch (e) {
+            alert("Error: " + e);
+        }
+    };
 
-  return (
-    <div className="p-10">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-            <h1 className="text-2xl font-bold text-gray-800">รายชื่อพนักงาน ({employees.length})</h1>
-            <p className="text-gray-500 text-sm mt-1">จัดการฐานข้อมูลพนักงานทั้งหมด</p>
-        </div>
-        <div className="flex gap-3">
-            <button 
-                onClick={() => setIsImportModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded shadow hover:bg-green-700 transition-colors"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                </svg>
-                นำเข้าข้อมูล (Excel)
-            </button>
-            <button onClick={addTestUser} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded shadow transition-colors">
-            + ทดสอบเพิ่มข้อมูล
-            </button>
-        </div>
-      </div>
-      
-      {/* ตารางแสดงผล */}
-      <div className="overflow-x-auto shadow-md rounded-lg">
-        <table className="min-w-full bg-white border border-gray-200">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border-b p-4 text-left font-semibold text-gray-600">รหัส</th>
-              <th className="border-b p-4 text-left font-semibold text-gray-600">ชื่อ-นามสกุล</th>
-              <th className="border-b p-4 text-left font-semibold text-gray-600">มาสาย (นาที)</th>
-              <th className="border-b p-4 text-left font-semibold text-gray-600">ลาป่วย (วัน)</th>
-              <th className="border-b p-4 text-left font-semibold text-gray-600">ขาดงาน (วัน)</th>
-              <th className="border-b p-4 text-left font-semibold text-gray-600">ใบเตือน</th>
-              {/* 👇 เพิ่มหัวตารางคะแนน */}
-              <th className="border-b p-4 text-center font-bold text-[#ff5722] bg-orange-50">
-                คะแนนปี {currentEvalYear}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {employees.length === 0 ? (
-               <tr><td colSpan={7} className="p-10 text-center text-gray-500">ไม่พบข้อมูลพนักงาน</td></tr>
-            ) : (
-              employees.map((emp: any) => (
-                <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="border-b p-4 text-gray-700">{emp.employeeId}</td>
-                  <td className="border-b p-4 text-gray-700">{emp.firstName} {emp.lastName}</td>
-                  
-                  <td className={`border-b p-4 font-mono ${emp.totalLateMinutes > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
-                    {emp.totalLateMinutes > 0 ? emp.totalLateMinutes : '-'}
-                  </td>
-                  <td className={`border-b p-4 font-mono ${emp.totalSickLeaveDays > 0 ? 'text-orange-600 font-bold' : 'text-gray-400'}`}>
-                    {emp.totalSickLeaveDays > 0 ? emp.totalSickLeaveDays : '-'}
-                  </td>
-                   <td className={`border-b p-4 font-mono ${emp.totalAbsentDays > 0 ? 'text-red-800 font-bold' : 'text-gray-400'}`}>
-                    {emp.totalAbsentDays > 0 ? emp.totalAbsentDays : '-'}
-                  </td>
-                  <td className={`border-b p-4 font-mono ${emp.warningCount > 0 ? 'text-red-700 font-bold' : 'text-gray-400'}`}>
-                    {emp.warningCount > 0 ? emp.warningCount : '-'}
-                  </td>
+    useEffect(() => {
+        fetchEmployees();
+    }, []);
 
-                  {/* 👇 แสดงคะแนนประเมิน */}
-                  <td className="border-b p-4 text-center bg-orange-50/30">
-                    {emp.evaluationScore !== null ? (
-                        <span className="bg-[#ff5722] text-white px-3 py-1 rounded-full font-bold shadow-sm">
-                            {emp.evaluationScore}
-                        </span>
-                    ) : (
-                        <span className="text-gray-300 text-sm italic">รอประเมิน</span>
-                    )}
-                  </td>
-                </tr>
-              ))
+    if (loading) return <div className="p-10 text-center text-blue-600">⏳ กำลังโหลดข้อมูล...</div>;
+
+    return (
+        <div className="p-10">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800">รายชื่อพนักงาน ({employees.length})</h1>
+                    <p className="text-gray-500 text-sm mt-1">จัดการฐานข้อมูลพนักงานทั้งหมด</p>
+                </div>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded shadow hover:bg-green-700 transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                        </svg>
+                        นำเข้าข้อมูล (Excel)
+                    </button>
+                    <button onClick={addTestUser} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded shadow transition-colors">
+                        + ทดสอบเพิ่มข้อมูล
+                    </button>
+                </div>
+            </div>
+
+            {/* ตารางแสดงผล */}
+            <div className="overflow-x-auto shadow-md rounded-lg">
+                <table className="min-w-full bg-white border border-gray-200">
+                    <thead className="bg-gray-100">
+                        <tr>
+                            <th className="border-b p-4 text-left font-semibold text-gray-600">รหัส</th>
+                            <th className="border-b p-4 text-left font-semibold text-gray-600">ชื่อ-นามสกุล</th>
+                            <th className="border-b p-4 text-left font-semibold text-gray-600">มาสาย (นาที)</th>
+                            <th className="border-b p-4 text-left font-semibold text-gray-600">ลาป่วย (วัน)</th>
+                            <th className="border-b p-4 text-left font-semibold text-gray-600">ขาดงาน (วัน)</th>
+                            <th className="border-b p-4 text-left font-semibold text-gray-600">ใบเตือน</th>
+                            {/* 👇 เพิ่มหัวตารางคะแนน */}
+                            <th className="border-b p-4 text-center font-bold text-[#ff5722] bg-orange-50">
+                                คะแนนปี {currentEvalYear}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {employees.length === 0 ? (
+                            <tr><td colSpan={7} className="p-10 text-center text-gray-500">ไม่พบข้อมูลพนักงาน</td></tr>
+                        ) : (
+                            employees.map((emp: any) => (
+                                <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="border-b p-4 text-gray-700">{emp.employeeId}</td>
+                                    <td className="border-b p-4 text-gray-700">{emp.firstName} {emp.lastName}</td>
+
+                                    <td className={`border-b p-4 font-mono ${emp.totalLateMinutes > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                                        {emp.totalLateMinutes > 0 ? emp.totalLateMinutes : '-'}
+                                    </td>
+                                    <td className={`border-b p-4 font-mono ${emp.totalSickLeaveDays > 0 ? 'text-orange-600 font-bold' : 'text-gray-400'}`}>
+                                        {emp.totalSickLeaveDays > 0 ? emp.totalSickLeaveDays : '-'}
+                                    </td>
+                                    <td className={`border-b p-4 font-mono ${emp.totalAbsentDays > 0 ? 'text-red-800 font-bold' : 'text-gray-400'}`}>
+                                        {emp.totalAbsentDays > 0 ? emp.totalAbsentDays : '-'}
+                                    </td>
+                                    <td className={`border-b p-4 font-mono ${emp.warningCount > 0 ? 'text-red-700 font-bold' : 'text-gray-400'}`}>
+                                        {emp.warningCount > 0 ? emp.warningCount : '-'}
+                                    </td>
+
+                                    {/* 👇 แสดงคะแนนประเมิน */}
+                                    <td className="border-b p-4 text-center bg-orange-50/30">
+                                        {emp.evaluationScore !== null ? (
+                                            <span className="bg-[#ff5722] text-white px-3 py-1 rounded-full font-bold shadow-sm">
+                                                {emp.evaluationScore}
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-300 text-sm italic">รอประเมิน</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {isImportModalOpen && (
+                <ImportModal onClose={() => setIsImportModalOpen(false)} onSuccess={() => fetchEmployees()} />
             )}
-          </tbody>
-        </table>
-      </div>
-
-      {isImportModalOpen && (
-        <ImportModal onClose={() => setIsImportModalOpen(false)} onSuccess={() => fetchEmployees()} />
-      )}
-    </div>
-  );
+        </div>
+    );
 }
 
-// --- ImportModal Component (คงเดิมตาม Code เก่าของคุณ) ---
+// --- ImportModal Component ---
 function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-    const [fileType, setFileType] = useState<'attendance' | 'leave' | 'warning'>('attendance');
+    const [fileType, setFileType] = useState<'attendance' | 'leave' | 'warning' | 'score'>('attendance');
     const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
-    
+    const [selectedScoreItem, setSelectedScoreItem] = useState<string>('');
+    const [scoreItems, setScoreItems] = useState<any[]>([]);
+
     const [loading, setLoading] = useState(false);
     const [fileName, setFileName] = useState('');
     const [sheetName, setSheetName] = useState('');
-    
+
     const [tableHeaders, setTableHeaders] = useState<any[]>([]);
     const [tableRows, setTableRows] = useState<any[][]>([]);
-    const [inputKey, setInputKey] = useState(Date.now()); 
+    const [inputKey, setInputKey] = useState(Date.now());
+
+    // Fetch Score Items when 'score' type is selected (ดึงข้อมูลหัวข้อคะแนนเมื่อเลือกประเภท 'score')
+    useEffect(() => {
+        if (fileType === 'score') {
+            const fetchItems = async () => {
+                // Query categories sorted by order (ดึงหมวดหมู่เรียงตามลำดับ)
+                const q = query(collection(db, 'evaluation_categories'), orderBy('order'));
+                const snapshot = await getDocs(q);
+                const items: any[] = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.questions) {
+                        data.questions.forEach((q: any) => {
+                            items.push({ id: q.id, title: q.title, category: data.title });
+                        });
+                    }
+                });
+                setScoreItems(items);
+                if (items.length > 0) setSelectedScoreItem(items[0].id);
+            };
+            fetchItems();
+        }
+    }, [fileType]);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -239,14 +265,14 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
             for (const sheet of workbook.SheetNames) {
                 const worksheet = workbook.Sheets[sheet];
-                const rawData = XLSX.utils.sheet_to_json(worksheet, { 
-                    header: 1, raw: false, defval: "" 
+                const rawData = XLSX.utils.sheet_to_json(worksheet, {
+                    header: 1, raw: false, defval: ""
                 }) as any[][];
 
                 let headerIndex = -1;
                 for (let i = 0; i < Math.min(rawData.length, 25); i++) {
                     const rowStr = JSON.stringify(rawData[i]);
-                    if (rowStr.includes("รหัส") || rowStr.includes("ชื่อ") || rowStr.includes("ลำดับ")) {
+                    if (rowStr.includes("รหัส") || rowStr.includes("ชื่อ") || rowStr.includes("ลำดับ") || (fileType === 'score' && rowStr.includes("EmployeeID"))) {
                         headerIndex = i;
                         break;
                     }
@@ -256,7 +282,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     foundHeaders = rawData[headerIndex];
                     foundBody = rawData.slice(headerIndex + 1);
                     foundBody = foundBody.filter(row => row.length > 0 && row.some(cell => cell !== "" && cell !== null));
-                    break; 
+                    break;
                 }
             }
 
@@ -277,13 +303,49 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
         }
     };
 
+    const downloadTemplate = async () => {
+        setLoading(true);
+        try {
+            // 1. Fetch Users (ดึงข้อมูลพนักงานทั้งหมด)
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const data: any[] = [];
+            usersSnapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.isActive !== false) { // เอาเฉพาะพนักงานที่ยัง Active (Active employees only)
+                    data.push({
+                        "EmployeeID": d.employeeId || "",
+                        "Name": `${d.firstName} ${d.lastName}`,
+                        "Score": "" // ช่องว่างให้กรอก (Empty column for scores)
+                    });
+                }
+            });
+
+            // 2. Sort by ID (เรียงตามรหัสพนักงาน)
+            data.sort((a, b) => a.EmployeeID.localeCompare(b.EmployeeID));
+
+            // 3. Create Excel
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Scores");
+
+            // 4. Download
+            XLSX.writeFile(wb, `Template_Score_${selectedScoreItem || 'General'}.xlsx`);
+
+        } catch (error) {
+            console.error("Error downloading template:", error);
+            alert("ดาวน์โหลด Template ไม่สำเร็จ");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleConfirmSave = async () => {
         if (tableRows.length === 0) return;
         setLoading(true);
 
         try {
             const usersSnapshot = await getDocs(collection(db, 'users'));
-            const employeeMap = new Map<string, string>(); 
+            const employeeMap = new Map<string, string>();
             usersSnapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.employeeId) employeeMap.set(String(data.employeeId), doc.id);
@@ -292,38 +354,88 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
             const batch = writeBatch(db);
             let updateCount = 0;
             const headerStr = tableHeaders.map(h => String(h).trim());
-            const empIdIndex = headerStr.findIndex(h => h.includes("รหัส")); 
+
+            // Flexible ID Column Finder
+            const empIdIndex = headerStr.findIndex(h => h.includes("รหัส") || h.toLowerCase() === "employeeid");
 
             if (empIdIndex === -1) {
-                alert("❌ ไม่พบคอลัมน์ 'รหัสพนักงาน' ในไฟล์");
+                alert("❌ ไม่พบคอลัมน์ 'รหัสพนักงาน' (EmployeeID) ในไฟล์");
                 setLoading(false);
                 return;
             }
 
-            if (fileType === 'attendance') {
-                const lateIndex = headerStr.findIndex(h => h.includes("มาสาย")); 
-                const absentIndex = headerStr.findIndex(h => h.includes("ขาดงาน")); 
+            if (fileType === 'score') {
+                if (!selectedScoreItem) { alert("กรุณาเลือกหัวข้อคะแนน"); setLoading(false); return; }
+
+                const scoreIndex = headerStr.findIndex(h => h.includes("Score") || h.includes("คะแนน"));
+                if (scoreIndex === -1) { alert("ไม่พบคอลัมน์ 'Score' หรือ 'คะแนน'"); setLoading(false); return; }
+
+                const currentPeriod = getCurrentPeriod ? getCurrentPeriod() : `${selectedYear}-Annual`;
+
+                // Loop through each row in Excel and save (วนลูปบันทึกข้อมูลทีละแถว)
+                for (const row of tableRows) {
+                    const empId = String(row[empIdIndex]).trim();
+                    const userDocId = employeeMap.get(empId);
+
+                    if (userDocId) {
+                        const rawScore = parseFloat(row[scoreIndex]);
+                        if (!isNaN(rawScore)) {
+                            // Find Evaluation Doc (ค้นหาเอกสารการประเมินที่มีอยู่)
+                            const evalsQuery = query(
+                                collection(db, 'evaluations'),
+                                where('employeeDocId', '==', userDocId),
+                                where('period', '==', currentPeriod)
+                            );
+                            const evalSnaps = await getDocs(evalsQuery);
+
+                            let evalRef;
+                            if (evalSnaps.empty) {
+                                // Create new if not exists
+                                evalRef = doc(collection(db, 'evaluations'));
+                                batch.set(evalRef, {
+                                    employeeDocId: userDocId,
+                                    period: currentPeriod,
+                                    scores: { [selectedScoreItem]: rawScore },
+                                    createdAt: serverTimestamp(),
+                                    updatedAt: serverTimestamp()
+                                });
+                            } else {
+                                // Update existing
+                                evalRef = evalSnaps.docs[0].ref;
+                                batch.update(evalRef, {
+                                    [`scores.${selectedScoreItem}`]: rawScore,
+                                    updatedAt: serverTimestamp()
+                                });
+                            }
+                            updateCount++;
+                        }
+                    }
+                }
+
+            } else if (fileType === 'attendance') {
+                const lateIndex = headerStr.findIndex(h => h.includes("มาสาย"));
+                const absentIndex = headerStr.findIndex(h => h.includes("ขาดงาน"));
 
                 if (lateIndex === -1) { alert("ไม่พบคอลัมน์ 'มาสาย'"); setLoading(false); return; }
 
                 tableRows.forEach(row => {
                     const empId = String(row[empIdIndex]).trim();
                     const docId = employeeMap.get(empId);
-                    
+
                     if (docId) {
-                        const rawLate = row[lateIndex]; 
-                        const minutes = parseLateTime(rawLate); 
-                        
+                        const rawLate = row[lateIndex];
+                        const minutes = parseLateTime(rawLate);
+
                         let absentDays = 0;
                         if (absentIndex !== -1) {
                             absentDays = parseFloat(String(row[absentIndex])) || 0;
                         }
 
                         const statsRef = doc(db, 'users', docId, 'yearlyStats', selectedYear);
-                        batch.set(statsRef, { 
+                        batch.set(statsRef, {
                             totalLateMinutes: minutes,
                             totalAbsentDays: absentDays,
-                            year: parseInt(selectedYear) 
+                            year: parseInt(selectedYear)
                         }, { merge: true });
 
                         if (selectedYear === String(new Date().getFullYear())) {
@@ -337,25 +449,25 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 });
 
             } else if (fileType === 'leave') {
-                const sickIndex = headerStr.findIndex(h => h === "ลาป่วย" || h.includes("ลาป่วย")); 
+                const sickIndex = headerStr.findIndex(h => h === "ลาป่วย" || h.includes("ลาป่วย"));
                 if (sickIndex === -1) { alert("ไม่พบคอลัมน์ 'ลาป่วย'"); setLoading(false); return; }
 
                 tableRows.forEach(row => {
                     const empId = String(row[empIdIndex]).trim();
                     const docId = employeeMap.get(empId);
-                    
+
                     if (docId) {
-                        const rawValue = row[sickIndex]; 
-                        const days = parseLeaveTime(rawValue); 
+                        const rawValue = row[sickIndex];
+                        const days = parseLeaveTime(rawValue);
 
                         const statsRef = doc(db, 'users', docId, 'yearlyStats', selectedYear);
-                        batch.set(statsRef, { 
+                        batch.set(statsRef, {
                             totalSickLeaveDays: days,
                             year: parseInt(selectedYear)
                         }, { merge: true });
 
                         if (selectedYear === String(new Date().getFullYear())) {
-                             batch.set(doc(db, 'users', docId), { totalSickLeaveDays: days }, { merge: true });
+                            batch.set(doc(db, 'users', docId), { totalSickLeaveDays: days }, { merge: true });
                         }
                         updateCount++;
                     }
@@ -375,13 +487,13 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     const docId = employeeMap.get(empId);
                     if (docId) {
                         const statsRef = doc(db, 'users', docId, 'yearlyStats', selectedYear);
-                        batch.set(statsRef, { 
+                        batch.set(statsRef, {
                             warningCount: count,
                             year: parseInt(selectedYear)
                         }, { merge: true });
 
                         if (selectedYear === String(new Date().getFullYear())) {
-                             batch.set(doc(db, 'users', docId), { warningCount: count }, { merge: true });
+                            batch.set(doc(db, 'users', docId), { warningCount: count }, { merge: true });
                         }
                         updateCount++;
                     }
@@ -390,7 +502,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
             if (updateCount > 0) {
                 await batch.commit();
-                alert(`✅ บันทึกข้อมูลประจำปี ${selectedYear} สำเร็จ! (${updateCount} รายการ)`);
+                alert(`✅ บันทึกข้อมูลเรียบร้อย! (${updateCount} รายการ)`);
                 onSuccess();
                 onClose();
             } else {
@@ -421,7 +533,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 <div className="p-6">
                     {tableRows.length === 0 ? (
                         <div className="mb-5 space-y-4">
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">ปีงบประมาณ (Year)</label>
                                 <select
                                     value={selectedYear}
@@ -435,7 +547,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">เลือกประเภทข้อมูล</label>
-                                <select 
+                                <select
                                     value={fileType}
                                     onChange={(e) => setFileType(e.target.value as any)}
                                     className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
@@ -443,10 +555,36 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                     <option value="attendance">1. ขาด/ลา/มาสาย (DB_ขาดสาย)</option>
                                     <option value="leave">2. สิทธิ์การลาคงเหลือ (DB_การลา)</option>
                                     <option value="warning">3. ใบเตือน/ความผิด (DB_ใบเตือน)</option>
+                                    <option value="score">4. คะแนนประเมินรายหัวข้อ (Evaluation Score)</option>
                                 </select>
                             </div>
+
+                            {fileType === 'score' && (
+                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                    <label className="block text-sm font-bold text-blue-800 mb-2">🎯 เลือกหัวข้อที่จะนำเข้าคะแนน</label>
+                                    <select
+                                        value={selectedScoreItem}
+                                        onChange={e => setSelectedScoreItem(e.target.value)}
+                                        className="w-full p-2 border rounded mb-3"
+                                    >
+                                        {scoreItems.map(item => (
+                                            <option key={item.id} value={item.id}>
+                                                [{item.id}] {item.title} ({item.category})
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    <button
+                                        onClick={downloadTemplate}
+                                        className="w-full py-2 bg-white border border-blue-300 text-blue-600 rounded hover:bg-blue-50 text-sm font-bold flex items-center justify-center gap-2"
+                                    >
+                                        📥 ดาวน์โหลด Template สำหรับกรอกคะแนน
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-gray-50 transition cursor-pointer relative group">
-                                <input 
+                                <input
                                     key={inputKey} type="file" accept=".xlsx, .xls"
                                     onChange={handleFileChange} disabled={loading}
                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -477,6 +615,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                         <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded border border-green-200 font-bold">Year: {selectedYear}</span>
                                     </div>
                                     <p className="text-xs text-blue-600 mt-1">พบข้อมูลจำนวน {tableRows.length} แถว</p>
+                                    {fileType === 'score' && <p className="text-xs font-bold text-purple-600 mt-1">Target: {selectedScoreItem}</p>}
                                 </div>
                                 <button onClick={handleReset} className="text-xs text-red-500 hover:text-red-700 underline">ยกเลิก / เลือกใหม่</button>
                             </div>
@@ -508,8 +647,8 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
                             <div className="flex justify-end gap-3 pt-2">
                                 <button onClick={handleReset} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">ยกเลิก</button>
-                                <button 
-                                    onClick={handleConfirmSave} 
+                                <button
+                                    onClick={handleConfirmSave}
                                     className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2"
                                     disabled={loading}
                                 >

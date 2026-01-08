@@ -42,6 +42,23 @@
   - [x] การกรอง Monthly Staff / HO Section ทำงานถูกต้อง
   - [x] การคำนวณคะแนนและ Popup ใช้งานได้
 
+### [T-008] Enhance UX/UI Theme
+- **Concept:** ปรับเปลี่ยน Theme และ Visual Design ให้ดูทันสมัย (Premium & Modern) ลดความหนาหนักของสีเดิม
+- **Principle:** Modern Clean UI / Glassmorphism / Soft Shadows
+- **Implementation Detail:**
+  1. **Global Theme:**
+     - Update `globals.css` with new variables (Surface colors, Primary accents).
+     - Switch font to 'IBM Plex Sans Thai'.
+  2. **Layout & Navbar:**
+     - Make Navbar sticky and cleaner (white background + shadow).
+  3. **Components:**
+     - **Cards:** White bg, rounded-xl, soft shadow.
+     - **Buttons:** Modern gradient or outline styles.
+     - **Inputs:** Clean border, focus ring.
+- **Confirm Task:**
+  - [x] หน้าเว็บดูสะอาด เสมือน App สมัยใหม่
+  - [x] การใช้งานดูลื่นไหล (Transitions/Animations)
+
 ### [T-005] Refactor Admin Navigation
 - **Concept:** ปรับปรุง Menu Bar ให้รวมกลุ่มเมนู Admin และใช้ชื่อที่สื่อความหมายชัดเจน
 - **Principle:** Dropdown Menu UI (Tailwind CSS)
@@ -67,9 +84,108 @@
   - [x] หน้า Eval แจ้งเตือนเมื่อสูตรเสีย
   - [x] หน้า Criteria แจ้งเตือนห้ามลบหากถูกใช้ในสูตร
 
+### [T-007] Refactor Evaluation Page Structure
+- **Concept:** ปรับโครงสร้าง Code ของหน้า Evaluation ให้แยก Component และ Logic เพื่อความสะอาดและ Maintain ง่าย (Clean Architecture)
+- **Principle:** Component Separation / Custom Hook
+- **Implementation Detail:**
+  1. Extract `EvaluationHeader`, `EmployeeSelector`, `EmployeeInfoCard`, `EmployeeStatsCard`, `EvaluationSection`, `ScoreHelperPopup`
+  2. Implement `useEvaluation` hook for logic
+  3. Refactor `evaluations/page.tsx` to use new structure
+- **Confirm Task:**
+  - [x] หน้าเว็บทำงานได้เหมือนเดิม (Functionality Parity)
+  - [x] Code สะอาดและอ่านง่ายขึ้น
+
+
+#### Error Log
+- **[T-006-E1-1]** (TypeScript Set Iteration Error)
+  - **Date:** 2025-01-06
+  - **Status:** Resolved
+  - **Cause:** TypeScript config (downlevelIteration) does not support `[...new Set(warnings)]`.
+  - **Solution:** Replaced with `.filter()` for deduplication.
+
+
 ---
 
 ## Phase 3: Future Enhancement
 ### [T-003] Dashboard & Reporting
 - **Concept:** สร้างหน้า Dashboard สรุปผลภาพรวมรายปี
 - **Principle:** Data Visualization / Aggregation Queries
+
+### [T-009] Support Evaluation Score Import
+- **Concept:** รองรับการนำเข้าคะแนนประเมินรายหัวข้อ (เช่น AI Score) จาก Excel
+- **Principle:** Flexible Mapping via Dynamic Criteria
+- **Implementation Detail:**
+  1. Update `ImportModal` in `employees/page.tsx` to support "Evaluation Score" type.
+  2. implemented "Download Template" feature.
+  3. Map imported scores to `evaluations` collection (`scores` map).
+- **Confirm Task:**
+  - [x] Import Modal มีตัวเลือก "Evaluation Score"
+  - [x] สามารถดาวน์โหลด Template ที่มีรหัสพนักงานได้
+  - [x] นำเข้าคะแนนและบันทึกลง Firestore ได้ถูกต้อง
+
+### [T-010] Enhance Evaluation Form Display
+- **Concept:** Support 'Raw Score' display for imported items (like AI Score) without 1-5 rating buttons.
+- **Principle:** `isReadOnly` flag in `QuestionItem`.
+- **Implementation Detail:**
+  1. Add `isReadOnly` to `QuestionItem` interface (`types/evaluation.ts` & `admin/criteria/page.tsx`).
+  2. Update Admin UI to allow toggling Read-Only mode.
+  3. Update `EvaluationSection` to render raw score badge instead of buttons if `isReadOnly` is true.
+- **Confirm Task:**
+  - [x] Admin can set question as "Read Only".
+  - [x] Evaluation Page displays imported score correctly without edit buttons.
+
+### [T-011] Conditional Scoring Logic & Total Score Persistence
+- **Concept:** Support complex annual scoring formulas that vary by employee level/section, and ensure the calculated Total Score is saved and used.
+- **Principle:** Conditional formulas (ternary operators) and named variable mapping.
+- **Implementation Detail:**
+  1. Inject `Employee` context (`Level`, `Section`, `isHO`, etc.) into the math calculation engine.
+  2. Implement `totalScore` persistence in `useEvaluation.ts` by capturing `VAR_TOTAL_SCORE`.
+  3. Ensure `disciplineScore` is correctly mapped from a named rule (e.g., `DISCIPLINE_SCORE`).
+  4. Fix formula engine to handle bracketed IDs (`[O_1]`) and raw variable names.
+- **Confirm Task:**
+  - [x] Context variables available in formula engine.
+  - [x] `TOTAL_SCORE` is saved to `evaluations` collection.
+  - [x] Employee List displays the correct Total Score.
+  - [x] `DISCIPLINE_SCORE` calculates correctly.
+
+#### Error Log
+- **[T-011-E1-1]** (Calculation Order Issue)
+  - **Date:** 2025-01-07
+  - **Status:** Resolved
+  - **Cause:** Variables are sorted by name length, causing Summations to be calculated before their Components. Components evaluate to 0 in the first pass.
+  - **Solution:** Implemented a 2-pass calculation loop. Pass 1 handles foundational values, Pass 2 handles dependent values (Summations).
+- **[T-011-E2-1]** (Thai Variable Syntax Error)
+  - **Date:** 2025-01-07
+  - **Status:** Resolved
+  - **Cause:** `math.js` parser threw SyntaxError on `[ThaiName]` variables in formulas.
+  - **Solution:** Implemented pre-evaluation substitution: `[ThaiName]` -> `(numericValue)`.
+- **[T-011-E3-1]** (Discipline Score Mismatch)
+  - **Date:** 2025-01-07
+  - **Status:** Resolved
+  - **Cause:** System did not recognize Thai variable `รวมคะแนนขาดลามาสาย` as `DISCIPLINE_SCORE`, causing fallback to incorrect default or other score.
+  - **Solution:** Explicitly mapped `รวมคะแนนขาดลามาสาย` to `DISCIPLINE_SCORE` logic in `useEvaluation.ts`.
+- **[T-011-E4-1]** (Dependency Depth Issue)
+  - **Date:** 2025-01-07
+  - **Status:** Resolved
+  - **Cause:** 2-pass calculation is insufficient for 3-layer dependencies (Discipline -> Behavior -> Total Score). Total Score reads stale Behavior score from Pass 1.
+  - **Solution:** Increase calculation passes to 5 to handle deeper dependency chains.
+### [T-012] Implement Grade Calculation & Display
+- **Concept:** แสดงเกรด (A/B/C) และสีตามช่วงคะแนน Total Score
+- **Principle:** Configuration-based Grade Ranges
+- **Implementation Detail:**
+  1. Create `src/utils/grade-calculation.ts` definition.
+  2. Integrate into `EmployeeStatsCard` to show Grade, Label, and dynamic colors.
+- **Confirm Task:**
+  - [x] Create Grade Utility.
+  - [x] UI Displays correct Grade & Color based on Score.
+
+### [T-013] Migrate Grade Config to Firestore
+- **Concept:** Move hardcoded Grade logic to Database for flexibility.
+- **Principle:** Dynamic Configuration vs Hardcorded Rule.
+- **Implementation Detail:**
+  1. **Schema:** `config_grading_rules` collection.
+  2. **Admin UI:** Add "Grading Criteria" tab in `admin/scoring`.
+  3. **Logic:** Refactor `useEvaluation` to fetch rules and pass to `EmployeeStatsCard`.
+- **Confirm Task:**
+  - [x] Admin UI can Create/Edit/Delete Grade Rules.
+  - [x] Evaluation Page reflects dynamic rules.
