@@ -5,10 +5,13 @@ import { collection, getDocs, addDoc, doc, writeBatch, serverTimestamp, query, o
 import { db } from '../../lib/firebase';
 import { Employee } from '../../types/employee';
 import * as XLSX from 'xlsx';
-// 👇 1. เพิ่ม Import เพื่อหาปีประเมินปัจจุบัน
 import { getCurrentPeriod, getEvaluationYear } from '../../utils/dateUtils';
+import { Search, Filter, Lock, Edit2, Users } from 'lucide-react';
+import EmployeeEditModal from '@/components/admin/EmployeeEditModal';
+import { getGrade } from '../../utils/grade-calculation';
+import { useGradingRules } from '../../hooks/useGradingRules';
 
-// --- 1. Helper Functions ---
+// --- Helper Functions ---
 const parseLateTime = (value: any): number => {
     if (!value) return 0;
     const str = String(value).trim();
@@ -35,15 +38,13 @@ const parseLeaveTime = (value: any): number => {
     return parseFloat(str) || 0;
 };
 
-import { Search, Filter, Lock, Edit2, Users } from 'lucide-react';
-import EmployeeEditModal from '@/components/admin/EmployeeEditModal';
-
-// ... (keep previous Helper Functions)
-
 export default function EmployeeListPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+    // 👇 State for Grading Rules (ใช้สำหรับคำนวณเกรดตอน Export)
+    const { rules: gradingRules } = useGradingRules();
 
     // 👇 State for Filtering & Search
     const [searchTerm, setSearchTerm] = useState('');
@@ -167,6 +168,52 @@ export default function EmployeeListPage() {
         return matchesSearch && matchesSection && matchesEvaluator;
     });
 
+    // 🌟 Function to Export Excel (ฟังก์ชันส่งออก Excel)
+    const handleExportExcel = () => {
+        if (filteredEmployees.length === 0) {
+            alert("ไม่พบข้อมูลพนักงานที่จะส่งออก");
+            return;
+        }
+
+        // 1. Prepare Data Logic (เตรียมข้อมูลสำหรับ Export)
+        const exportData = filteredEmployees.map((emp: any) => {
+            const score = emp.evaluationScore;
+            // คำนวณเกรดโดยใช้ rules ปัจจุบัน
+            const gradeInfo = score !== null ? getGrade(score, gradingRules) : null;
+
+            return {
+                "รหัสพนักงาน": emp.employeeId,
+                "ชื่อ-นามสกุล": `${emp.firstName} ${emp.lastName}`,
+                "ส่วนงาน (Section)": emp.section,
+                "แผนก (Department)": emp.department,
+                "ตำแหน่ง": emp.position,
+                [`คะแนนปี ${currentEvalYear}`]: score !== null ? Number(score).toFixed(2) : "รอประเมิน",
+                "เกรด (Grade)": gradeInfo ? gradeInfo.grade : (score !== null ? "-" : "")
+            };
+        });
+
+        // 2. Create Workbook & Sheet (สร้างไฟล์ Excel)
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(exportData);
+
+        // Adjust column width (ปรับความกว้างคอลัมน์ให้อ่านง่าย)
+        const wscols = [
+            { wch: 15 }, // ID
+            { wch: 30 }, // Name
+            { wch: 20 }, // Section
+            { wch: 20 }, // Department
+            { wch: 20 }, // Position
+            { wch: 15 }, // Score
+            { wch: 10 }  // Grade
+        ];
+        ws['!cols'] = wscols;
+
+        XLSX.utils.book_append_sheet(wb, ws, "Evaluation_Result");
+
+        // 3. Trigger Download
+        XLSX.writeFile(wb, `Employee_Evaluations_${currentEvalYear}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
     if (loading) return <div className="p-10 text-center text-blue-600">⏳ กำลังโหลดข้อมูล...</div>;
 
     return (
@@ -177,6 +224,17 @@ export default function EmployeeListPage() {
                     <p className="text-gray-500 text-sm mt-1">ฐานข้อมูลพนักงานและสิทธิ์การใช้งาน</p>
                 </div>
                 <div className="flex gap-3">
+                    {/* 🔥 Export Button */}
+                    <button
+                        onClick={handleExportExcel}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg shadow hover:bg-blue-700 transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                        </svg>
+                        ส่งออกผลประเมิน (Excel)
+                    </button>
+
                     <button
                         onClick={() => setIsImportModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg shadow hover:bg-green-700 transition-colors"
@@ -186,9 +244,6 @@ export default function EmployeeListPage() {
                         </svg>
                         นำเข้าข้อมูล (Excel)
                     </button>
-                    {/* <button onClick={addTestUser} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded shadow transition-colors">
-                        + ทดสอบ
-                    </button> */}
                 </div>
             </div>
 

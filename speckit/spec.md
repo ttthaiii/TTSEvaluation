@@ -31,6 +31,7 @@
 1. **View List:** เข้าหน้า `/employees` เห็นรายชื่อพนักงานทั้งหมด
 2. **Filtering:** กรองข้อมูลตาม "Department" หรือ "Section"
 3. **Status Check:** แสดงสถานะพนักงาน (Active/Inactive)
+4. **Export:** กดปุ่ม "ส่งออกผลประเมิน (Excel)" เพื่อดาวน์โหลดไฟล์รายงาน (รวมคะแนนและเกรด)
 
 ### 2. Architecture
 - **Component:** `src/app/employees/page.tsx`

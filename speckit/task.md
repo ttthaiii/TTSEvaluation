@@ -37,6 +37,8 @@
   1. [x] `layout.tsx`: Fetch `await auth()` and pass to Providers.
   2. [x] `Providers.tsx`: Receive `session` prop.
   3. [x] `auth.ts`: Relax redirect validation.
+  4. [x] `auth.ts`: Rename cookie to `__session`.
+  5. [x] `Navbar.tsx`: Fix logout redirect 0.0.0.0 issue.
 - **Confirm Task:**
   - [ ] Navbar แสดงชื่อผู้ใช้หลัง Login
   - [ ] Dashboard แสดงข้อมูลกราฟและตาราง
@@ -135,6 +137,18 @@
   - [x] Admin Scoring ใช้ข้อมูลจริงจาก DB
   - [x] หน้า Eval แจ้งเตือนเมื่อสูตรเสีย
   - [x] หน้า Criteria แจ้งเตือนห้ามลบหากถูกใช้ในสูตร
+
+### [T-022] Excel Export for Employee List
+- **Concept:** ส่งออกข้อมูลพนักงานพร้อมคะแนนและเกรดเป็น Excel
+- **Principle:** `xlsx` generation & dynamic grade calculation
+- **Implementation Detail:**
+  1. Add "Export" button in `EmployeeListPage`.
+  2. Implement `handleExportExcel` logic using `xlsx`.
+  3. Calculate grade dynamically using `useGradingRules`.
+- **Confirm Task:**
+  - [x] Export file contains ID, Name, Section, Dept, Score, Grade.
+  - [x] Grade calculation matches current rules.
+
 
 ### [T-007] Refactor Evaluation Page Structure
 - **Concept:** ปรับโครงสร้าง Code ของหน้า Evaluation ให้แยก Component และ Logic เพื่อความสะอาดและ Maintain ง่าย (Clean Architecture)

@@ -6,7 +6,7 @@
 | :--- | :--- | :--- | :--- |
 | **F-001** (Import) | T-001, T-009 | `src/app/employees/page.tsx` | Main Import UI & Logic (Migrated) |
 | | | `src/types/import-data.ts` | Interface: `LateAbsentRow`, `LeaveRow` |
-| **F-002** (Emp Mgmt) | - | `src/app/employees/page.tsx` | Employee List UI |
+| **F-002** (Emp Mgmt) | T-018, T-022 | `src/app/employees/page.tsx` | Employee List UI & **Export Logic** |
 | | | `src/types/employee.ts` | Interface: `Employee` |
 | **F-003** (Evaluation) | T-002, T-004 | `src/app/evaluations/page.tsx` | **Main Engine** (Dynamic Criteria) |
 | | | `Firestore: evaluation_categories` | Collection: Criteria Configuration |

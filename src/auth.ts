@@ -109,6 +109,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const userDoc = querySnapshot.docs[0]
                     const userData = userDoc.data()
 
+                    // 🔥 SPECIAL RULE: Grant Admin rights to specific users
+                    if (userData.employeeId === '100348') {
+                        userData.role = 'Admin';
+                    }
+
                     // 2. Validate Password
                     // Priority: 1. Custom Password (in DB)  2. Default (Employee ID)
                     let isValid = false;
