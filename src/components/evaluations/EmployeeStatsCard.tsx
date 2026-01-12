@@ -18,35 +18,37 @@ export interface EmployeeStatsCardProps {
     readOnlyItems?: { id: string; title: string; score: number | string; description?: string }[];
     showTotalScore?: boolean;
     gradingRules?: GradeCriteria[];
+    isCompact?: boolean; // 🔥 New Prop
 }
 
-export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, disciplineScore, totalScore, readOnlyItems = [], showTotalScore = true, gradingRules }) => {
+export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, disciplineScore, totalScore, readOnlyItems = [], showTotalScore = true, gradingRules, isCompact = false }) => {
 
     // 🔥 Calculate Grade (Dynamic Rules)
     const gradeData = showTotalScore && totalScore ? getGrade(totalScore, gradingRules) : null;
 
     return (
         <div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-center">
+            {/* Stats Grid: Use Compact Mode? */}
+            <div className={`grid gap-4 mb-8 ${isCompact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
+                <div className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm ${isCompact ? 'text-left pl-5' : 'text-center'}`}>
                     <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-1">รวมมาสาย</p>
                     <p className={`text-2xl font-bold ${stats.totalLateMinutes > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                         {stats.totalLateMinutes} <span className="text-sm font-medium text-slate-300">นาที</span>
                     </p>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-center">
+                <div className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm ${isCompact ? 'text-left pl-5' : 'text-center'}`}>
                     <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-1">รวมลาป่วย</p>
                     <p className={`text-2xl font-bold ${stats.totalSickLeaveDays > 30 ? 'text-orange-500' : 'text-slate-700'}`}>
                         {stats.totalSickLeaveDays} <span className="text-sm font-medium text-slate-300">วัน</span>
                     </p>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-center">
+                <div className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm ${isCompact ? 'text-left pl-5' : 'text-center'}`}>
                     <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-1">รวมขาดงาน</p>
                     <p className={`text-2xl font-bold ${stats.totalAbsentDays > 0 ? 'text-rose-500' : 'text-slate-700'}`}>
                         {isNaN(Number(stats.totalAbsentDays)) ? 0 : stats.totalAbsentDays} <span className="text-sm font-medium text-slate-300">วัน</span>
                     </p>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-center">
+                <div className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm ${isCompact ? 'text-left pl-5' : 'text-center'}`}>
                     <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-1">ใบเตือน</p>
                     <p className={`text-2xl font-bold ${stats.warningCount > 0 ? 'text-rose-500' : 'text-slate-700'}`}>
                         {stats.warningCount} <span className="text-sm font-medium text-slate-300">ใบ</span>
@@ -55,11 +57,11 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
             </div>
 
             {/* Scores Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className={`grid gap-6 ${isCompact ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
 
                 {/* 🔥 Render ReadOnly Items (Imported Scores) */}
                 {readOnlyItems.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div key={item.id} className={`bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-shadow flex ${isCompact ? 'flex-col items-start gap-4' : 'items-center justify-between'}`}>
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-xl">
                                 📊
@@ -77,7 +79,7 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                     </div>
                 ))}
 
-                <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className={`bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-shadow flex ${isCompact ? 'flex-col items-start gap-4' : 'items-center justify-between'}`}>
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-2xl">
                             ⚖️
@@ -95,7 +97,7 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                 </div>
 
                 {showTotalScore && (
-                    <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div className={`bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-shadow flex ${isCompact ? 'flex-col items-start gap-4 col-span-2' : 'items-center justify-between'}`}>
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-2xl">
                                 🏆
@@ -108,7 +110,7 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                                 <p className="text-sm text-orange-600/70 py-0.5">Total Score</p>
                             </div>
                         </div>
-                        <div className="flex flex-col items-end">
+                        <div className={`flex flex-col ${isCompact ? 'items-start w-full' : 'items-end'}`}>
                             <div className={`text-4xl font-black ${gradeData?.colorClass || 'text-orange-600'} tracking-tight`}>
                                 {totalScore ?? '-'}
                             </div>

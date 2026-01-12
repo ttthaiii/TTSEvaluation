@@ -12,11 +12,11 @@ import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useModal } from '../context/ModalContext'; // 🔥 Import useModal
 
-export const useEvaluation = () => {
+export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
     const searchParams = useSearchParams();
-    const targetEmpId = searchParams.get('employeeId');
+    const targetEmpId = props?.defaultEmployeeId || searchParams.get('employeeId');
 
     // 🔥 Modal Hook
     const { showAlert, showConfirm } = useModal();
@@ -179,7 +179,15 @@ export const useEvaluation = () => {
                     const subSections = new Set<string>();
                     uniqueSubordinates.forEach(e => subSections.add(e.section));
                     setEmployees(uniqueSubordinates);
-                    setSections(Array.from(subSections).sort());
+
+                    const finalSections = Array.from(subSections).sort();
+                    setSections(finalSections);
+
+                    // [T-026] Auto-select default section if user has only one (เลือกโครงการอัตโนมัติถ้ามีแค่ 1 โครงการ)
+                    if (finalSections.length === 1) {
+                        setSelectedSection(finalSections[0]);
+                        setFilteredEmployees(uniqueSubordinates); // 🔥 Fix: แสดงรายชื่อพนักงานทันที
+                    }
                 }
             } else {
                 setEmployees([]);
@@ -497,7 +505,7 @@ export const useEvaluation = () => {
         }
     };
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (onSuccess?: (savedData: EvaluationRecord) => void) => {
         if (!selectedEmployee) return;
 
         const isConfirmed = await showConfirm('ยืนยันการบันทึก', `คุณต้องการบันทึกผลการประเมินของ\n${selectedEmployee.firstName} ${selectedEmployee.lastName} ใช่หรือไม่?`);
@@ -521,18 +529,31 @@ export const useEvaluation = () => {
                 evaluationYear: evalYear
             };
 
+            let savedDocId = "";
             const prevEval = existingEvaluations[selectedEmployee.id];
+
             if (prevEval) {
-                const docRef = doc(db, 'evaluations', prevEval.docId);
+                savedDocId = prevEval.docId;
+                const docRef = doc(db, 'evaluations', savedDocId);
                 await setDoc(docRef, dataToSave, { merge: true });
             } else {
-                await addDoc(collection(db, 'evaluations'), {
+                const docRef = await addDoc(collection(db, 'evaluations'), {
                     ...dataToSave,
                     createdAt: Timestamp.now()
                 });
+                savedDocId = docRef.id;
             }
 
-            await showAlert("สำเร็จ", "✅ บันทึกการประเมินเรียบร้อย!");
+            // Construct full record for local update
+            const fullRecord: EvaluationRecord = {
+                docId: savedDocId,
+                ...dataToSave,
+                createdAt: prevEval ? prevEval.createdAt : Timestamp.now()
+            };
+
+            if (onSuccess && typeof onSuccess === 'function') {
+                onSuccess(fullRecord);
+            }
 
             const returnTo = searchParams.get('returnTo');
             if (returnTo) {
@@ -540,16 +561,32 @@ export const useEvaluation = () => {
                 return;
             }
 
-            await initData();
-            setScores({});
-            setSelectedEmployeeId('');
-            setSelectedEmployee(null);
-            setEmployeeStats(null);
-            setDisciplineScore("-");
+            if (!onSuccess) {
+                // Default behavior: refresh and clear selection (only if not handled by custom success flow)
+                await initData();
+                setScores({});
+                setSelectedEmployeeId('');
+                setSelectedEmployee(null);
+                setEmployeeStats(null);
+                setDisciplineScore("-");
+                await showAlert("สำเร็จ", "✅ บันทึกการประเมินเรียบร้อย!");
+            }
         } catch (error) {
             console.error("Error saving evaluation:", error);
             await showAlert("ข้อผิดพลาด", "❌ เกิดข้อผิดพลาดในการบันทึก: " + error);
         }
+    };
+
+    const updateLocalEvaluation = (newEval: EvaluationRecord) => {
+        setExistingEvaluations(prev => ({
+            ...prev,
+            [newEval.employeeDocId]: newEval
+        }));
+        setCompletedEvaluationIds(prev => {
+            const newSet = new Set(prev);
+            newSet.add(newEval.employeeDocId);
+            return newSet;
+        });
     };
 
     const getDisplayCategories = () => {
@@ -565,6 +602,8 @@ export const useEvaluation = () => {
             return { ...cat, questions: validQuestions };
         }).filter(c => c !== null) as Category[];
     };
+
+    // ... (rest of helper functions same as before) 
 
     const openPopup = (item: QuestionItem) => {
         if (popupData?.criteriaId === item.id) return;
@@ -599,6 +638,7 @@ export const useEvaluation = () => {
         const sum = values.reduce((a, b) => a + b, 0);
         const avg = (sum / values.length).toFixed(2);
         handleScoreChange(popupData.criteriaId, Math.round(parseFloat(avg)));
+        closePopup(); // 🔥 Auto-close after applying
     };
 
     const getReadOnlyItems = () => {
@@ -646,9 +686,11 @@ export const useEvaluation = () => {
         closePopup,
         handlePopupScore,
         applyPopupScore,
-        popupData, // 🔥 Exposed
-        popupScores, // 🔥 Exposed
+        popupData,
+        popupScores,
         categories,
-        employees
+        employees,
+        refreshData: initData, // 🔥 Exposed for manual refresh
+        updateLocalEvaluation, // 🔥 Exposed for local update
     };
 };

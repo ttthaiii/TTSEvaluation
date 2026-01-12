@@ -113,7 +113,7 @@ export default function EvaluationPage() {
           ))}
 
           {selectedEmployee && (
-            <button className="w-full bg-[#4caf50] hover:bg-[#43a047] text-white font-bold py-5 rounded-xl shadow-lg transition-transform active:scale-[0.99] text-2xl mt-8" onClick={handleSubmit}>
+            <button className="w-full bg-[#4caf50] hover:bg-[#43a047] text-white font-bold py-5 rounded-xl shadow-lg transition-transform active:scale-[0.99] text-2xl mt-8" onClick={() => handleSubmit()}>
               บันทึกการประเมิน
             </button>
           )}

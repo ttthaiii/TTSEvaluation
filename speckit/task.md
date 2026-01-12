@@ -30,6 +30,18 @@
   - [x] Login สำเร็จแล้ว Redirect ไป Dashboard ได้
   - [x] Dashboard ไม่ค้างหน้า Loading เมื่อไม่ได้ Login
 
+### [T-025] Implement Firebase Security Bridge (Rules)
+- **Concept:** เชื่อมต่อ NextAuth กับ Firebase Auth เพื่อล็อค Rule
+- **Principle:** Custom Token Exchange
+- **Implementation Detail:**
+  1. `firebase-admin.ts`: Setup Admin SDK.
+  2. `/api/auth/firebase-token`: Endpoint for token minting.
+  3. `FirebaseAuthSync.tsx`: Client-side sync.
+  4. Update `firestore.rules`.
+- **Confirm Task:**
+  - [ ] Login แล้วได้ Firebase Token (User ใน Firebase Console Active)
+  - [ ] Data โหลดได้ปกติเมื่อเปิด Rule `request.auth != null`
+
 ### [T-021] Fix Session Persistence (Data Not Loading)
 - **Concept:** แก้ไขปัญหา Login แล้วหน้า Dashboard ไม่มีข้อมูล และ Navbar แสดงสถานะเหมือนยังไม่ Login
 - **Principle:** Server-side Session Passing & Dynamic BaseURL
@@ -276,3 +288,17 @@
 - **Confirm Task:**
   - [x] Admin UI can Create/Edit/Delete Grade Rules.
   - [x] Evaluation Page reflects dynamic rules.
+### [T-FIX-001] Fix Score Popup Auto-close
+- **Concept:** Ensure Score Calculator popup closes immediately after clicking "Use this score".
+- **Status:** Done
+- **Implementation Detail:**
+  1. Verify `onClose` calls in `ScoreHelperPopup`.
+  2. Check for event propagation issues.
+  3. **Fix:** Added `type="button"` to allow explicit onClick handling without side effects. Added Thai comments.
+
+### [T-026] Default Section Selection
+- **Concept:** Auto-select section if evaluator has only one section.
+- **Status:** Done
+- **Implementation Detail:**
+  1. Check `sections` length in `useEvaluation` hook.
+  2. If `length === 1`, set `selectedSection` to that value.

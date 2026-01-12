@@ -87,7 +87,11 @@ export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
                         </span>
                     </div>
                     <button
-                        onClick={onApplyScore}
+                        type="button" // ป้องกันการ Submit Form โดยไม่ตั้งใจ
+                        onClick={() => {
+                            onApplyScore(); // บันทึกคะแนนลงในระบบ
+                            onClose(); // ปิดหน้าต่าง Popup ทันที
+                        }}
                         disabled={!avg}
                         className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-slate-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                     >

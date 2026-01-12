@@ -8,9 +8,10 @@ interface EmployeeTableProps {
     data: DashboardItem[];
     categories?: Category[];
     onRowClick?: (employeeId: string) => void;
+    onEvaluate?: (employeeId: string) => void;
 }
 
-export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories = [], onRowClick }) => {
+export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories = [], onRowClick, onEvaluate }) => {
     const router = useRouter(); // 🔥 Initialize Router
 
     const getCategoryPercentage = (item: DashboardItem, catId: string) => {
@@ -58,8 +59,9 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
 
     const handleNameClick = (e: React.MouseEvent, employeeId: string) => {
         e.stopPropagation(); // 🛑 Stop row click (filter)
-        // Navigate to Evaluation Page with ID
-        router.push(`/evaluations?employeeId=${employeeId}&returnTo=/dashboard`);
+        if (onEvaluate) {
+            onEvaluate(employeeId);
+        }
     };
 
     return (
