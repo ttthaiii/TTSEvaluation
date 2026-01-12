@@ -166,9 +166,20 @@
 - **Implementation Detail:**
   1. Update `EmployeeTable` in Dashboard to link name to `/evaluations`.
   2. Update `useEvaluation` hook to read `employeeId` from URL and auto-select.
-- **Confirm Task:**
-  - [x] Click Name -> Redirects to Evaluation Page.
   - [x] Evaluation Page auto-selects the correct employee.
+
+### [T-024] Replace Web Alerts with Modals
+- **Concept:** เปลี่ยน `alert()` / `confirm()` ของ Browser เป็น Custom Modal UI
+- **Principle:** React Context + Promise-based Modal
+- **Implementation Detail:**
+  1. Create `Dialog` Component & `ModalContext`.
+  2. Implement `useModal` hook (`showAlert`, `showConfirm`).
+  3. Replace native calls in `useEvaluation`, `EmployeeListPage`, `AdminPages`.
+- **Confirm Task:**
+  - [ ] Alert แสดงเป็น Modal สวยงาม
+  - [ ] Confirm แสดงเป็น Modal และ return promise (true/false) ถูกต้อง
+
+
 
 
 

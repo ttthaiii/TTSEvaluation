@@ -59,7 +59,7 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
     const handleNameClick = (e: React.MouseEvent, employeeId: string) => {
         e.stopPropagation(); // 🛑 Stop row click (filter)
         // Navigate to Evaluation Page with ID
-        router.push(`/evaluations?employeeId=${employeeId}`);
+        router.push(`/evaluations?employeeId=${employeeId}&returnTo=/dashboard`);
     };
 
     return (
@@ -91,15 +91,22 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                         </tr>
                     ) : (
                         data.map((item, index) => {
-                            // Use createdAt (preferred) or updatedAt or fallback
-                            const timestamp = item.evaluation?.createdAt || item.evaluation?.updatedAt;
+                            // Use updatedAt as requested, fallback to createdAt
+                            const timestamp = item.evaluation?.updatedAt || item.evaluation?.createdAt;
 
                             let dateStr = '-';
                             if (timestamp) {
-                                const dateObj = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
-                                dateStr = dateObj.toLocaleDateString('th-TH', {
-                                    year: 'numeric', month: 'short', day: 'numeric'
-                                });
+                                let dateObj: Date | null = null;
+                                if (typeof (timestamp as any).toDate === 'function') dateObj = (timestamp as any).toDate();
+                                else if ((timestamp as any).seconds) dateObj = new Date((timestamp as any).seconds * 1000);
+                                else if (timestamp instanceof Date) dateObj = timestamp;
+                                else if (typeof timestamp === 'string') dateObj = new Date(timestamp);
+
+                                if (dateObj) {
+                                    dateStr = dateObj.toLocaleDateString('th-TH', {
+                                        year: 'numeric', month: 'short', day: 'numeric'
+                                    });
+                                }
                             }
 
                             return (
@@ -130,7 +137,7 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                                     </td>
                                     <td className="px-6 py-4">{dateStr}</td>
                                     <td className="px-6 py-4 text-center font-bold text-slate-800">
-                                        {item.totalScore}%
+                                        {Number(item.totalScore).toFixed(2)}%
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         {getCategoryPercentage(item, 'A')}%

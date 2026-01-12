@@ -9,15 +9,19 @@ import { Category, EvaluationRecord, QuestionItem, ScoringRule } from '../types/
 import { EmployeeStats } from '../components/evaluations/EmployeeStatsCard';
 import { PopupData } from '../components/evaluations/ScoreHelperPopup';
 import { useSession } from 'next-auth/react';
-import { useRouter, useSearchParams } from 'next/navigation'; // 🔥 Add useSearchParams
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useModal } from '../context/ModalContext'; // 🔥 Import useModal
 
 export const useEvaluation = () => {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
-    const searchParams = useSearchParams(); // 🔥 Get Params
-    const targetEmpId = searchParams.get('employeeId'); // 🔥 Get target ID
+    const searchParams = useSearchParams();
+    const targetEmpId = searchParams.get('employeeId');
 
-    // Year Logic
+    // 🔥 Modal Hook
+    const { showAlert, showConfirm } = useModal();
+
+    // ... (Year Logic)
     const evalYear = typeof getEvaluationYear === 'function' ? getEvaluationYear() : new Date().getFullYear();
     const currentPeriod = typeof getCurrentPeriod === 'function' ? getCurrentPeriod() : `${evalYear}-Annual`;
 
@@ -94,7 +98,10 @@ export const useEvaluation = () => {
                         scores: d.scores || {},
                         employeeDocId: d.employeeDocId,
                         totalScore: d.totalScore,
-                        disciplineScore: d.disciplineScore
+                        disciplineScore: d.disciplineScore,
+                        updatedAt: d.updatedAt,
+                        createdAt: d.createdAt,
+                        aiScore: d.aiScore
                     };
 
                     // Check Completeness
@@ -407,7 +414,8 @@ export const useEvaluation = () => {
             setDisciplineScore(calculatedDisciplineScore);
 
             const calculatedTotal = context['VAR_TOTAL_SCORE'] || context['VAR_Total_Score'] || 0;
-            setTotalScore(typeof calculatedTotal === 'number' ? calculatedTotal : 0);
+            const finalTotal = typeof calculatedTotal === 'number' ? calculatedTotal : 0;
+            setTotalScore(Number(finalTotal.toFixed(2)));
 
         } catch (err) {
             setDisciplineScore("Error");
@@ -448,7 +456,7 @@ export const useEvaluation = () => {
             currentLoadedScores = prevEval.scores;
             setScores(prevEval.scores);
             if (emp && completedEvaluationIds.has(emp.id)) {
-                const confirmReEval = confirm(`⚠️ พนักงานคนนี้(${emp.firstName}) ถูกประเมินไปแล้ว คุณต้องการประเมินซ้ำหรือไม่ ? `);
+                const confirmReEval = await showConfirm('ยืนยันการประเมินซ้ำ', `⚠️ พนักงานคนนี้ (${emp.firstName}) ถูกประเมินไปแล้ว\nคุณต้องการกลับไปแก้ไขการประเมินหรือไม่?`);
                 if (!confirmReEval) {
                     setSelectedEmployeeId('');
                     setSelectedEmployee(null);
@@ -491,7 +499,9 @@ export const useEvaluation = () => {
 
     const handleSubmit = async () => {
         if (!selectedEmployee) return;
-        if (!confirm(`ยืนยันการบันทึกการประเมินของ ${selectedEmployee.firstName}?`)) return;
+
+        const isConfirmed = await showConfirm('ยืนยันการบันทึก', `คุณต้องการบันทึกผลการประเมินของ\n${selectedEmployee.firstName} ${selectedEmployee.lastName} ใช่หรือไม่?`);
+        if (!isConfirmed) return;
 
         try {
             const dataToSave = {
@@ -505,7 +515,7 @@ export const useEvaluation = () => {
                 scores: scores,
                 aiScore: 0,
                 disciplineScore: disciplineScore,
-                totalScore: totalScore,
+                totalScore: Number(totalScore.toFixed(2)),
                 updatedAt: Timestamp.now(),
                 period: currentPeriod,
                 evaluationYear: evalYear
@@ -522,7 +532,14 @@ export const useEvaluation = () => {
                 });
             }
 
-            alert("✅ บันทึกการประเมินเรียบร้อย!");
+            await showAlert("สำเร็จ", "✅ บันทึกการประเมินเรียบร้อย!");
+
+            const returnTo = searchParams.get('returnTo');
+            if (returnTo) {
+                router.push(returnTo);
+                return;
+            }
+
             await initData();
             setScores({});
             setSelectedEmployeeId('');
@@ -531,7 +548,7 @@ export const useEvaluation = () => {
             setDisciplineScore("-");
         } catch (error) {
             console.error("Error saving evaluation:", error);
-            alert("❌ เกิดข้อผิดพลาดในการบันทึก: " + error);
+            await showAlert("ข้อผิดพลาด", "❌ เกิดข้อผิดพลาดในการบันทึก: " + error);
         }
     };
 

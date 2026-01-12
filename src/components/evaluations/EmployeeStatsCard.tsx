@@ -69,7 +69,6 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                                     <h4 className="font-bold text-blue-900 text-lg">{item.title}</h4>
                                     {item.description && <InfoTooltip text={item.description} />}
                                 </div>
-                                <p className="text-xs text-blue-600/70 py-0.5 uppercase">Imported Score</p>
                             </div>
                         </div>
                         <div className="text-4xl font-black text-blue-500 tracking-tight">
@@ -86,9 +85,8 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                         <div>
                             <div className="flex items-center gap-2">
                                 <h4 className="font-bold text-emerald-900 text-lg">คะแนนด้านระเบียบ</h4>
-                                <InfoTooltip text="คะแนนสุทธิที่คำนวณจากสูตร (Formula) เพื่อใช้ในการประเมินจริง" />
+                                <InfoTooltip text="คำนวณจากการ ขาด, ลา, มาสาย, ใบเตือน" />
                             </div>
-                            <p className="text-sm text-emerald-600/70 py-0.5">Final Discipline Score</p>
                         </div>
                     </div>
                     <div className="text-4xl font-black text-emerald-500 tracking-tight">

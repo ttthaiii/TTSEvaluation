@@ -6,6 +6,7 @@ import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp
 import { db } from '../../../lib/firebase';
 import { useGradingRules } from '../../../hooks/useGradingRules';
 import { GRADE_RANGES, GradeCriteria } from '../../../utils/grade-calculation';
+import { useModal } from '../../../context/ModalContext'; // 🔥
 
 
 // --- Interfaces & Constants ---
@@ -38,6 +39,7 @@ interface SavedRule {
 
 export default function ScoringConfigPage() {
   // --- States ---
+  const { showAlert, showConfirm } = useModal(); // 🔥
   const [activeTab, setActiveTab] = useState<'FORMULA' | 'GRADE'>('FORMULA');
   const { rules: gradeRules, loading: gradeLoading, addRule: addGrade, updateRule: updateGrade, deleteRule: deleteGrade, seedDefaults } = useGradingRules();
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null);
@@ -277,7 +279,7 @@ export default function ScoringConfigPage() {
   };
 
   const saveFormula = async () => {
-    if (!formulaName) return alert("กรุณากรอกชื่อ");
+    if (!formulaName) { await showAlert("ข้อผิดพลาด", "กรุณากรอกชื่อ"); return; }
 
     let finalVarCode = variableCodeInternal;
     if (formulaType === 'VARIABLE' && !finalVarCode) {
@@ -289,7 +291,7 @@ export default function ScoringConfigPage() {
       finalFormula = generateFormulaFromTable(selectedSimpleVar);
     }
 
-    if (!finalFormula) return alert("ยังไม่มีสูตร");
+    if (!finalFormula) { await showAlert("ข้อผิดพลาด", "ยังไม่มีสูตร"); return; }
 
     const dataToSave = {
       name: formulaName,
@@ -307,29 +309,29 @@ export default function ScoringConfigPage() {
     try {
       if (editingId) {
         await updateDoc(doc(db, 'scoring_formulas', editingId), dataToSave);
-        alert("อัปเดตข้อมูลสำเร็จ!");
+        await showAlert("สำเร็จ", "✅ อัปเดตข้อมูลสำเร็จ!");
       } else {
         await addDoc(collection(db, 'scoring_formulas'), dataToSave);
-        alert("บันทึกข้อมูลสำเร็จ!");
+        await showAlert("สำเร็จ", "✅ บันทึกข้อมูลสำเร็จ!");
       }
 
       resetForm();
       fetchData();
 
     } catch (e) {
-      alert("บันทึกไม่ผ่าน: " + e);
+      await showAlert("ข้อผิดพลาด", "บันทึกไม่ผ่าน: " + e);
     }
   };
 
   const deleteRule = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("ยืนยันการลบ?")) return;
+    if (!await showConfirm("ยืนยัน", "ยืนยันการลบ?")) return;
     try {
       await deleteDoc(doc(db, 'scoring_formulas', id));
       fetchData();
       if (editingId === id) resetForm();
     } catch (e) {
-      alert("ลบไม่สำเร็จ: " + e);
+      await showAlert("ข้อผิดพลาด", "ลบไม่สำเร็จ: " + e);
     }
   };
 
@@ -445,8 +447,8 @@ export default function ScoringConfigPage() {
                 </select>
 
                 <button
-                  onClick={() => {
-                    if (!gradeForm.grade || !gradeForm.label) return alert("กรุณากรอกข้อมูลให้ครบ");
+                  onClick={async () => {
+                    if (!gradeForm.grade || !gradeForm.label) { await showAlert("แจ้งเตือน", "กรุณากรอกข้อมูลให้ครบ"); return; }
                     if (editingGradeId) {
                       // @ts-ignore
                       updateGrade(editingGradeId, gradeForm);
@@ -478,7 +480,7 @@ export default function ScoringConfigPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <div className={`text-xs px-2 py-1 rounded ${rule.bgClass} ${rule.colorClass} border ${rule.borderClass}`}>Preview</div>
-                      <button onClick={(e) => { e.stopPropagation(); if (confirm('Delete?')) deleteGrade(rule.id!); }} className="text-red-400 hover:text-red-600 px-2">🗑️</button>
+                      <button onClick={async (e) => { e.stopPropagation(); if (await showConfirm("ยืนยัน", "Delete?")) deleteGrade(rule.id!); }} className="text-red-400 hover:text-red-600 px-2">🗑️</button>
                     </div>
                   </div>
                 ))}

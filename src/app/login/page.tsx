@@ -30,7 +30,7 @@ export default function LoginPage() {
 
             if (result?.error) {
                 console.error("🔴 Login failed with error:", result.error);
-                setError('รหัสพนักงานหรือรหัสผ่านไม่ถูกต้อง');
+                setError('Username หรือ Password ไม่ถูกต้อง');
             } else {
                 console.log("🟢 Login success! Redirecting to /dashboard...");
                 console.log("🟢 Login success! Redirecting to /dashboard...");
@@ -65,7 +65,7 @@ export default function LoginPage() {
 
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">
-                            รหัสพนักงาน
+                            Username
                         </label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -76,7 +76,7 @@ export default function LoginPage() {
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-colors"
-                                placeholder="กรอกรหัสพนักงาน (เช่น 101622)"
+                                placeholder="กรอก Username"
                                 required
                             />
                         </div>
@@ -99,9 +99,6 @@ export default function LoginPage() {
                                 required
                             />
                         </div>
-                        <p className="mt-2 text-xs text-slate-500 text-right">
-                            *ค่าเริ่มต้นคือรหัสพนักงาน
-                        </p>
                     </div>
 
                     <button

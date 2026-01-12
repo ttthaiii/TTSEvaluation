@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-// Import ข้อมูลตั้งต้นเผื่อใช้ Reset
 import { EVALUATION_CRITERIA } from '../../../data/evaluation-criteria';
+import { useModal } from '../../../context/ModalContext'; // 🔥
 
 interface QuestionItem {
     id: string; // เช่น A-1
@@ -23,6 +23,7 @@ interface Category {
 }
 
 export default function CriteriaManagementPage() {
+    const { showAlert, showConfirm } = useModal(); // 🔥
     const [categories, setCategories] = useState<Category[]>([]);
     const [scoringRules, setScoringRules] = useState<any[]>([]); // 🔥 for Safety Check
     const [loading, setLoading] = useState(true);
@@ -55,7 +56,7 @@ export default function CriteriaManagementPage() {
 
         } catch (err) {
             console.error(err);
-            alert("โหลดข้อมูลไม่สำเร็จ");
+            await showAlert("ข้อผิดพลาด", "โหลดข้อมูลไม่สำเร็จ");
         } finally {
             setLoading(false);
         }
@@ -69,7 +70,7 @@ export default function CriteriaManagementPage() {
 
     // ฟังก์ชันโหลดข้อมูลจากไฟล์ Static ลง Database ครั้งแรก
     const loadDefaults = async () => {
-        if (!confirm("การโหลดค่าเริ่มต้นจะล้างข้อมูลเกณฑ์ที่มีอยู่ทั้งหมด?")) return;
+        if (!await showConfirm("ยืนยัน", "การโหลดค่าเริ่มต้นจะล้างข้อมูลเกณฑ์ที่มีอยู่ทั้งหมด?")) return;
         try {
             setLoading(true);
             const batch = writeBatch(db);
@@ -101,10 +102,10 @@ export default function CriteriaManagementPage() {
             });
 
             await batch.commit();
-            alert("✅ โหลดข้อมูลเริ่มต้นเรียบร้อย!");
+            await showAlert("สำเร็จ", "✅ โหลดข้อมูลเริ่มต้นเรียบร้อย!");
             fetchData();
         } catch (e) {
-            alert("Error: " + e);
+            await showAlert("ข้อผิดพลาด", "Error: " + e);
         } finally {
             setLoading(false);
         }
@@ -116,11 +117,11 @@ export default function CriteriaManagementPage() {
             await setDoc(doc(db, 'evaluation_categories', editingCat.id), editingCat);
             setEditingCat(null);
             fetchData();
-        } catch (e) { alert(e); }
+        } catch (e) { await showAlert("ข้อผิดพลาด", String(e)); }
     };
 
     const deleteCategory = async (id: string) => {
-        if (!confirm("ยืนยันลบหมวดหมู่นี้?")) return;
+        if (!await showConfirm("ยืนยัน", "ยืนยันลบหมวดหมู่นี้?")) return;
         await deleteDoc(doc(db, 'evaluation_categories', id));
         fetchData();
     };
@@ -151,7 +152,7 @@ export default function CriteriaManagementPage() {
             await setDoc(doc(db, 'evaluation_categories', cat.id), cat);
             setEditingQuestion(null);
             fetchData();
-        } catch (e) { alert(e); }
+        } catch (e) { await showAlert("ข้อผิดพลาด", String(e)); }
     };
 
     const deleteQuestion = async (qId: string) => {
@@ -167,12 +168,12 @@ export default function CriteriaManagementPage() {
 
         if (usedIn.length > 0) {
             const ruleNames = usedIn.map(r => `"${r.name}"`).join(', ');
-            alert(`🚫 ไม่สามารถลบ "${qId}" ได้!\n\nเนื่องจากถูกใช้งานอยู่ในสูตรคำนวณ:\n${ruleNames}\n\nกรุณาลบหรือแก้ไขสูตรเหล่านี้ก่อนครับ`);
+            await showAlert("ไม่สามารถดำเนินการได้", `🚫 ไม่สามารถลบ "${qId}" ได้!\n\nเนื่องจากถูกใช้งานอยู่ในสูตรคำนวณ:\n${ruleNames}\n\nกรุณาลบหรือแก้ไขสูตรเหล่านี้ก่อนครับ`);
             return;
         }
 
         // 2. Normal Delete
-        if (!confirm("ยืนยันการลบข้อนี้?")) return;
+        if (!await showConfirm("ยืนยัน", "ยืนยันการลบข้อนี้?")) return;
 
         const cat = categories.find(c => c.id === selectedCatId);
         if (!cat) return;

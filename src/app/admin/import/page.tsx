@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { parseExcelFile, validateData } from '@/utils/excelParser';
-import { Timestamp } from 'firebase/firestore'; 
+import { Timestamp } from 'firebase/firestore';
+import { useModal } from '../../../context/ModalContext'; // 🔥
 // import { saveToFirebase } from '@/lib/firebase'; // (สมมติว่าคุณมีฟังก์ชันบันทึก)
 
 export default function ImportPage() {
+  const { showAlert } = useModal(); // 🔥
   const [fileType, setFileType] = useState<'attendance' | 'leave' | 'warning'>('attendance');
   const [loading, setLoading] = useState(false);
 
@@ -17,12 +19,12 @@ export default function ImportPage() {
     try {
       // 1. แปลงไฟล์ Excel เป็น JSON
       const rawData = await parseExcelFile(file, fileType);
-      
+
       // 2. ตรวจสอบว่าไฟล์ถูกประเภทไหม
       const isValid = validateData(rawData, fileType);
-      
+
       if (!isValid) {
-        alert('รูปแบบไฟล์ไม่ถูกต้อง หรืออัปโหลดผิดประเภทไฟล์ กรุณาตรวจสอบ Template');
+        await showAlert("ข้อมูลไม่ถูกต้อง", 'รูปแบบไฟล์ไม่ถูกต้อง หรืออัปโหลดผิดประเภทไฟล์ กรุณาตรวจสอบ Template');
         setLoading(false);
         return;
       }
@@ -31,19 +33,19 @@ export default function ImportPage() {
 
       // 3. (ขั้นตอนต่อไป) วนลูป rawData เพื่อบันทึกลง Firestore
       // ตัวอย่าง: processAndSaveData(rawData, fileType);
-      
-      alert(`อ่านข้อมูลสำเร็จจำนวน ${rawData.length} รายการ (ดูใน Console)`);
-      
+
+      await showAlert("สำเร็จ", `อ่านข้อมูลสำเร็จจำนวน ${rawData.length} รายการ (ดูใน Console)`);
+
     } catch (error) {
       console.error(error);
-      alert('เกิดข้อผิดพลาดในการอ่านไฟล์');
+      await showAlert("ข้อผิดพลาด", 'เกิดข้อผิดพลาดในการอ่านไฟล์');
     } finally {
       setLoading(false);
     }
   };
 
   const getTemplateName = () => {
-    switch(fileType) {
+    switch (fileType) {
       case 'attendance': return 'DB_ขาดสาย.xlsx';
       case 'leave': return 'DB_การลา.xlsx';
       case 'warning': return 'DB_ใบเตือน.xlsx';
@@ -53,14 +55,14 @@ export default function ImportPage() {
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">นำเข้าข้อมูลพนักงาน (Import Data)</h1>
-      
+
       <div className="bg-white p-6 rounded-lg shadow-md border">
-        
+
         {/* เลือกประเภทไฟล์ */}
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2">เลือกประเภทข้อมูลที่ต้องการนำเข้า</label>
-          <select 
-            value={fileType} 
+          <select
+            value={fileType}
             onChange={(e) => setFileType(e.target.value as any)}
             className="w-full p-2 border rounded"
           >
@@ -74,9 +76,9 @@ export default function ImportPage() {
         <div className="mb-6 p-4 bg-gray-50 rounded border border-dashed">
           <p className="text-sm text-gray-600 mb-2">
             *กรุณาใช้ไฟล์ Template <b>{getTemplateName()}</b> เท่านั้น
-            <br/> หัวตารางต้องตรงตามต้นฉบับ ห้ามแก้ไขชื่อคอลัมน์
+            <br /> หัวตารางต้องตรงตามต้นฉบับ ห้ามแก้ไขชื่อคอลัมน์
           </p>
-          <button className="text-blue-600 text-sm hover:underline" onClick={() => alert('ฟังก์ชันดาวน์โหลด Template (คุณสามารถใส่ลิงก์ไฟล์จริงที่นี่)')}>
+          <button className="text-blue-600 text-sm hover:underline" onClick={async () => await showAlert("แจ้งเตือน", 'ฟังก์ชันดาวน์โหลด Template (คุณสามารถใส่ลิงก์ไฟล์จริงที่นี่)')}>
             ดาวน์โหลด Template: {getTemplateName()}
           </button>
         </div>
@@ -84,8 +86,8 @@ export default function ImportPage() {
         {/* Input อัปโหลด */}
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">เลือกไฟล์ Excel (.xlsx)</label>
-          <input 
-            type="file" 
+          <input
+            type="file"
             accept=".xlsx, .xls"
             onChange={handleFileUpload}
             disabled={loading}

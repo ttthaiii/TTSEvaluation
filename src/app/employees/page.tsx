@@ -38,10 +38,17 @@ const parseLeaveTime = (value: any): number => {
     return parseFloat(str) || 0;
 };
 
+// ... (Top Imports)
+import { useModal } from '../../context/ModalContext';
+
 export default function EmployeeListPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+    // 🔥 Modal Hook
+    const { showAlert, showConfirm } = useModal();
+
 
     // 👇 State for Grading Rules (ใช้สำหรับคำนวณเกรดตอน Export)
     const { rules: gradingRules } = useGradingRules();
@@ -138,10 +145,10 @@ export default function EmployeeListPage() {
                 isActive: true,
                 employeeId: "TEST-" + Math.floor(Math.random() * 1000)
             });
-            alert(`เพิ่มข้อมูลสำเร็จ! ID: ${docRef.id}`);
+            await showAlert("สำเร็จ", `เพิ่มข้อมูลสำเร็จ! ID: ${docRef.id}`);
             fetchEmployees();
         } catch (e) {
-            alert("Error: " + e);
+            await showAlert("ข้อผิดพลาด", "Error: " + e);
         }
     };
 
@@ -169,9 +176,9 @@ export default function EmployeeListPage() {
     });
 
     // 🌟 Function to Export Excel (ฟังก์ชันส่งออก Excel)
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         if (filteredEmployees.length === 0) {
-            alert("ไม่พบข้อมูลพนักงานที่จะส่งออก");
+            await showAlert("แจ้งเตือน", "ไม่พบข้อมูลพนักงานที่จะส่งออก");
             return;
         }
 
@@ -408,6 +415,7 @@ export default function EmployeeListPage() {
 
 // --- ImportModal Component ---
 function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
+    const { showAlert, showConfirm } = useModal(); // 🔥 Use Modal Hook
     const [fileType, setFileType] = useState<'users' | 'attendance' | 'leave' | 'warning' | 'score'>('attendance');
     const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
     const [selectedScoreItem, setSelectedScoreItem] = useState<string>('');
@@ -489,12 +497,12 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 setTableHeaders(foundHeaders);
                 setTableRows(foundBody);
             } else {
-                alert("❌ ไม่พบตารางข้อมูลพนักงานในไฟล์นี้");
+                await showAlert("แจ้งเตือน", "❌ ไม่พบตารางข้อมูลพนักงานในไฟล์นี้");
                 setFileName('');
             }
         } catch (error) {
             console.error(error);
-            alert("เกิดข้อผิดพลาดในการอ่านไฟล์");
+            await showAlert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการอ่านไฟล์");
             setFileName('');
         } finally {
             setLoading(false);
@@ -579,7 +587,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
             XLSX.writeFile(wb, `Template_Score_${selectedScoreItem || 'General'}.xlsx`);
         } catch (error) {
             console.error("Error generating score template:", error);
-            alert("เกิดข้อผิดพลาดในการสร้าง Template");
+            await showAlert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการสร้าง Template");
         } finally {
             setLoading(false);
         }
@@ -605,7 +613,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
             const empIdIndex = headerStr.findIndex(h => h.includes("รหัส") || h.toLowerCase() === "employeeid");
 
             if (empIdIndex === -1) {
-                alert("❌ ไม่พบคอลัมน์ 'รหัสพนักงาน' (EmployeeID) ในไฟล์");
+                await showAlert("ข้อมูลไม่ครบถ้วน", "❌ ไม่พบคอลัมน์ 'รหัสพนักงาน' (EmployeeID) ในไฟล์");
                 setLoading(false);
                 return;
             }
@@ -697,10 +705,10 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 }
 
             } else if (fileType === 'score') {
-                if (!selectedScoreItem) { alert("กรุณาเลือกหัวข้อคะแนน"); setLoading(false); return; }
+                if (!selectedScoreItem) { await showAlert("ข้อมูลไม่ครบถ้วน", "กรุณาเลือกหัวข้อคะแนน"); setLoading(false); return; }
 
                 const scoreIndex = headerStr.findIndex(h => h.includes("Score") || h.includes("คะแนน"));
-                if (scoreIndex === -1) { alert("ไม่พบคอลัมน์ 'Score' หรือ 'คะแนน'"); setLoading(false); return; }
+                if (scoreIndex === -1) { await showAlert("ข้อมูลไม่ครบถ้วน", "ไม่พบคอลัมน์ 'Score' หรือ 'คะแนน'"); setLoading(false); return; }
 
                 const currentPeriod = getCurrentPeriod ? getCurrentPeriod() : `${selectedYear}-Annual`;
 
@@ -748,7 +756,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 const lateIndex = headerStr.findIndex(h => h.includes("มาสาย"));
                 const absentIndex = headerStr.findIndex(h => h.includes("ขาดงาน"));
 
-                if (lateIndex === -1) { alert("ไม่พบคอลัมน์ 'มาสาย'"); setLoading(false); return; }
+                if (lateIndex === -1) { await showAlert("ข้อมูลไม่ครบถ้วน", "ไม่พบคอลัมน์ 'มาสาย'"); setLoading(false); return; }
 
                 tableRows.forEach(row => {
                     const empId = String(row[empIdIndex]).trim();
@@ -781,7 +789,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
             } else if (fileType === 'leave') {
                 const sickIndex = headerStr.findIndex(h => h === "ลาป่วย" || h.includes("ลาป่วย"));
-                if (sickIndex === -1) { alert("ไม่พบคอลัมน์ 'ลาป่วย'"); setLoading(false); return; }
+                if (sickIndex === -1) { await showAlert("ข้อมูลไม่ครบถ้วน", "ไม่พบคอลัมน์ 'ลาป่วย'"); setLoading(false); return; }
 
                 tableRows.forEach(row => {
                     const empId = String(row[empIdIndex]).trim();
@@ -831,15 +839,15 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
             if (updateCount > 0) {
                 await batch.commit();
-                alert(`✅ บันทึกข้อมูลเรียบร้อย! (${updateCount} รายการ)`);
+                await showAlert("สำเร็จ", `✅ บันทึกข้อมูลเรียบร้อย! (${updateCount} รายการ)`);
                 onSuccess();
                 onClose();
             } else {
-                alert("⚠️ ไม่พบข้อมูลพนักงานที่ตรงกันในฐานข้อมูลเลย");
+                await showAlert("แจ้งเตือน", "⚠️ ไม่พบข้อมูลพนักงานที่ตรงกันในฐานข้อมูลเลย");
             }
         } catch (error) {
             console.error("Error saving data:", error);
-            alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + error);
+            await showAlert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + error);
         } finally {
             setLoading(false);
         }

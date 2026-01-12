@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useModal } from '../../context/ModalContext'; // 🔥
 
 interface EmployeeEditModalProps {
     isOpen: boolean;
@@ -12,6 +13,7 @@ interface EmployeeEditModalProps {
 }
 
 export default function EmployeeEditModal({ isOpen, onClose, employeeId, employeeName, onSaveSuccess, currentYear }: EmployeeEditModalProps) {
+    const { showAlert } = useModal(); // 🔥
     const [activeTab, setActiveTab] = useState<'stats' | 'security'>('stats');
     const [loading, setLoading] = useState(false);
 
@@ -101,11 +103,11 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
             const mainRef = doc(db, 'users', employeeId);
             await updateDoc(mainRef, stats);
 
-            alert("✅ บันทึกข้อมูลสถิติเรียบร้อย");
+            await showAlert("สำเร็จ", "✅ บันทึกข้อมูลสถิติเรียบร้อย");
             onSaveSuccess();
         } catch (error) {
             console.error("Error saving stats:", error);
-            alert("เกิดข้อผิดพลาดในการบันทับึก");
+            await showAlert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการบันทึก");
         } finally {
             setLoading(false);
         }
@@ -126,11 +128,11 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
             }
 
             await updateDoc(userRef, updateData);
-            alert("✅ บันทึกข้อมูลความปลอดภัยเรียบร้อย");
+            await showAlert("สำเร็จ", "✅ บันทึกข้อมูลความปลอดภัยเรียบร้อย");
             setNewPassword('');
         } catch (error) {
             console.error("Error saving security settings:", error);
-            alert("เกิดข้อผิดพลาดในการบันทึก");
+            await showAlert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการบันทึก");
         } finally {
             setLoading(false);
         }
