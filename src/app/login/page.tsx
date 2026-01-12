@@ -17,6 +17,8 @@ export default function LoginPage() {
         setLoading(true);
         setError('');
 
+        console.log("🔵 Attempting login...", { username });
+
         try {
             const result = await signIn('credentials', {
                 username,
@@ -24,13 +26,19 @@ export default function LoginPage() {
                 redirect: false,
             });
 
+            console.log("🟡 SignIn Result:", result);
+
             if (result?.error) {
+                console.error("🔴 Login failed with error:", result.error);
                 setError('รหัสพนักงานหรือรหัสผ่านไม่ถูกต้อง');
             } else {
-                router.push('/dashboard');
-                router.refresh();
+                console.log("🟢 Login success! Redirecting to /dashboard...");
+                console.log("🟢 Login success! Redirecting to /dashboard...");
+                // FORCE RELOAD: Fixes 'Node cannot be found' and ensures cookies are sent correctly
+                window.location.href = '/dashboard';
             }
         } catch (err) {
+            console.error("💥 Exception during login:", err);
             setError('เกิดข้อผิดพลาด กรุณาลองใหม่');
         } finally {
             setLoading(false);

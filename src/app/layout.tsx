@@ -18,18 +18,21 @@ export const metadata: Metadata = {
 
 import Providers from "@/components/Providers";
 import Navbar from "@/components/Navbar";
+import { auth } from "@/auth";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await auth();
+
   return (
     <html lang="en">
       <body
         className={`${ibmPlexSansThai.variable} font-sans antialiased bg-[#fafafa] text-slate-900`}
       >
-        <Providers>
+        <Providers session={session}>
           <Navbar />
 
           {/* Spacer for Fixed Navbar */}

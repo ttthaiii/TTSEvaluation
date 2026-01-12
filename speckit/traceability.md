@@ -33,7 +33,7 @@
 | Score Popup | Component | `ScoreHelperPopup.tsx` | `components/evaluations/ScoreHelperPopup.tsx` | F-003 |
 | **Logic & Calculation** |
 | Scoring Engine | Function | `runDisciplineCalculation` | `hooks/useEvaluation.ts` | F-003 |
-| Evaluation Logic | Hook | `useEvaluation.ts` | `hooks/useEvaluation.ts` | F-003 (Updated Calculation Loop) |
+| Evaluation Logic | Hook | `useEvaluation.ts` | `hooks/useEvaluation.ts` | F-003 (Updated Calculation Loop & Auth State) |
 | Stats Context | Object | `employeeStats` (State) | `evaluations/page.tsx` | F-003 |
 | Math Library | Lib | `mathjs` | `(Dependency)` | F-003 |
 | **Data Models** |

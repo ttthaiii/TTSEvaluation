@@ -93,7 +93,10 @@ export default function Navbar() {
                             <div className="h-6 w-px bg-gray-200 hidden sm:block"></div>
 
                             <button
-                                onClick={() => signOut({ callbackUrl: '/login' })}
+                                onClick={async () => {
+                                    await signOut({ redirect: false });
+                                    window.location.href = '/login';
+                                }}
                                 className="flex items-center gap-2 text-slate-600 hover:text-red-600 transition-colors text-sm font-medium px-3 py-2 rounded-lg hover:bg-red-50"
                             >
                                 <LogOut className="w-4 h-4" />

@@ -9,9 +9,11 @@ import { Category, EvaluationRecord, QuestionItem, ScoringRule } from '../types/
 import { EmployeeStats } from '../components/evaluations/EmployeeStatsCard';
 import { PopupData } from '../components/evaluations/ScoreHelperPopup';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 export const useEvaluation = () => {
     const [loading, setLoading] = useState(true);
+    const router = useRouter();
 
     // Year Logic
     const evalYear = typeof getEvaluationYear === 'function' ? getEvaluationYear() : new Date().getFullYear();
@@ -188,6 +190,10 @@ export const useEvaluation = () => {
     useEffect(() => {
         if (status === 'authenticated') {
             initData();
+        } else if (status === 'unauthenticated') {
+            setLoading(false);
+            // Optional: Redirect if needed, or let the component handle it
+            // router.push('/login'); 
         }
     }, [status, session]);
 
@@ -596,6 +602,8 @@ export const useEvaluation = () => {
         closePopup,
         handlePopupScore,
         applyPopupScore,
+        popupData, // 🔥 Exposed
+        popupScores, // 🔥 Exposed
         categories,
         employees
     };

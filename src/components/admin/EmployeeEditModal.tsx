@@ -97,10 +97,9 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
 
             // 2. Update Main Doc (for quick access if needed, though we primarily use yearlyStats now)
             // But to be consistent with import logic:
-            if (currentYear === new Date().getFullYear()) {
-                const mainRef = doc(db, 'users', employeeId);
-                await updateDoc(mainRef, stats);
-            }
+            // 2. Update Main Doc (Always update main doc to reflect the current evaluation/stats in the list)
+            const mainRef = doc(db, 'users', employeeId);
+            await updateDoc(mainRef, stats);
 
             alert("✅ บันทึกข้อมูลสถิติเรียบร้อย");
             onSaveSuccess();

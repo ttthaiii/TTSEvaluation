@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, getDocs, doc, writeBatch, serverTimestamp, query, orderBy, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, writeBatch, serverTimestamp, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Employee } from '../../types/employee';
 import * as XLSX from 'xlsx';
@@ -715,12 +715,11 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                             year: parseInt(selectedYear)
                         }, { merge: true });
 
-                        if (selectedYear === String(new Date().getFullYear())) {
-                            batch.set(doc(db, 'users', docId), {
-                                totalLateMinutes: minutes,
-                                totalAbsentDays: absentDays
-                            }, { merge: true });
-                        }
+                        // Always sync to main doc for list view consistency
+                        batch.set(doc(db, 'users', docId), {
+                            totalLateMinutes: minutes,
+                            totalAbsentDays: absentDays
+                        }, { merge: true });
                         updateCount++;
                     }
                 });
@@ -743,9 +742,8 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                             year: parseInt(selectedYear)
                         }, { merge: true });
 
-                        if (selectedYear === String(new Date().getFullYear())) {
-                            batch.set(doc(db, 'users', docId), { totalSickLeaveDays: days }, { merge: true });
-                        }
+                        // Always sync to main doc
+                        batch.set(doc(db, 'users', docId), { totalSickLeaveDays: days }, { merge: true });
                         updateCount++;
                     }
                 });
@@ -769,9 +767,8 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                             year: parseInt(selectedYear)
                         }, { merge: true });
 
-                        if (selectedYear === String(new Date().getFullYear())) {
-                            batch.set(doc(db, 'users', docId), { warningCount: count }, { merge: true });
-                        }
+                        // Always sync to main doc
+                        batch.set(doc(db, 'users', docId), { warningCount: count }, { merge: true });
                         updateCount++;
                     }
                 });

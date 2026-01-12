@@ -2,13 +2,15 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// Hardcoded Firebase Config to ensure stability across deployments
+// These are public keys and safe to be in client-side code
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyBqvxiUfVB15RXFVXBxZo9qA6pf5oCNmn4",
+  authDomain: "tts2004evaluation.firebaseapp.com",
+  projectId: "tts2004evaluation",
+  storageBucket: "tts2004evaluation.firebasestorage.app",
+  messagingSenderId: "908218732176",
+  appId: "1:908218732176:web:f599384ab1848a105ed215",
 };
 
 console.log("🔥 Firebase Config Loaded Project ID:", firebaseConfig.projectId);

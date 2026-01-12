@@ -20,6 +20,27 @@
 - **SubTasks:**
   - [ ] Unit Test Parser logic
 
+### [T-020] Fix Login Hang & Redirect
+- **Concept:** แก้ไขปัญหา Login แล้วค้าง และ Dashboard โหลดไม่เสร็จ
+- **Principle:** Handle 'unauthenticated' state & Force Full Redirect
+- **Implementation Detail:**
+  1. Login Page: Use `window.location.href` instead of `router.push`.
+  2. Dashboard Hook: Set `loading(false)` when `status === 'unauthenticated'`.
+- **Confirm Task:**
+  - [x] Login สำเร็จแล้ว Redirect ไป Dashboard ได้
+  - [x] Dashboard ไม่ค้างหน้า Loading เมื่อไม่ได้ Login
+
+### [T-021] Fix Session Persistence (Data Not Loading)
+- **Concept:** แก้ไขปัญหา Login แล้วหน้า Dashboard ไม่มีข้อมูล และ Navbar แสดงสถานะเหมือนยังไม่ Login
+- **Principle:** Server-side Session Passing & Dynamic BaseURL
+- **Implementation Detail:**
+  1. [x] `layout.tsx`: Fetch `await auth()` and pass to Providers.
+  2. [x] `Providers.tsx`: Receive `session` prop.
+  3. [x] `auth.ts`: Relax redirect validation.
+- **Confirm Task:**
+  - [ ] Navbar แสดงชื่อผู้ใช้หลัง Login
+  - [ ] Dashboard แสดงข้อมูลกราฟและตาราง
+
 ### [T-002] Verify Evaluation Calculation logic
 - **Concept:** ตรวจสอบความถูกต้องของการคำนวณคะแนน (Scoring Engine)
 - **Principle:** Usage of `mathjs` context
