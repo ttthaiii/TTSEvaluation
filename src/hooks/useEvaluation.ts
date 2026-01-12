@@ -9,11 +9,13 @@ import { Category, EvaluationRecord, QuestionItem, ScoringRule } from '../types/
 import { EmployeeStats } from '../components/evaluations/EmployeeStatsCard';
 import { PopupData } from '../components/evaluations/ScoreHelperPopup';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // 🔥 Add useSearchParams
 
 export const useEvaluation = () => {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
+    const searchParams = useSearchParams(); // 🔥 Get Params
+    const targetEmpId = searchParams.get('employeeId'); // 🔥 Get target ID
 
     // Year Logic
     const evalYear = typeof getEvaluationYear === 'function' ? getEvaluationYear() : new Date().getFullYear();
@@ -196,6 +198,31 @@ export const useEvaluation = () => {
             // router.push('/login'); 
         }
     }, [status, session]);
+
+    // 🔥 Auto-select Employee from URL (ทำงานเมื่อมี parameter ?employeeId=...)
+    useEffect(() => {
+        if (!loading && employees.length > 0 && targetEmpId) {
+            const target = employees.find(e => e.employeeId === targetEmpId);
+            // ตรวจสอบว่า target อยู่ในรายการที่ User มีสิทธิ์เห็นหรือไม่
+            if (target) {
+                // If not already selected (ป้องกัน loop หรือ re-fetch ไม่จำเป็น)
+                if (selectedEmployeeId !== target.id) {
+                    console.log("🔗 Auto-selecting employee from URL:", target.firstName);
+                    handleEmployeeChange({ target: { value: target.id } } as any);
+
+                    // Optional: ถ้าต้องการเลือก Section ให้ตรงด้วย (เพื่อความเนียน)
+                    if (target.section !== selectedSection && selectedSection !== 'All') {
+                        // อาจจะไม่จำเป็นต้องเปลี่ยน Section Dropdown ถ้า UI แสดงผลได้อยู่แล้ว
+                        // แต่ถ้า Filter มันบังอยู่ อาจจะต้อง Reset Filter
+                        setSelectedSection('All');
+                        setFilteredEmployees(employees); // Reset filter to show all so the selected one is visible
+                    }
+                }
+            } else {
+                console.warn("⚠️ Employee ID from URL not found in authorized list.");
+            }
+        }
+    }, [loading, employees, targetEmpId]);
 
     // --- Safety Check Logic ---
     const validateScoringIntegrity = (rules: ScoringRule[], cats: Category[]) => {

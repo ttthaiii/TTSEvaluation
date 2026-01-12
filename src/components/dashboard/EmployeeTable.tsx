@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter } from 'next/navigation'; // 🔥 Import useRouter
 import { DashboardItem } from '@/types/dashboard';
 import { Category } from '@/types/evaluation';
 import { HO_SECTIONS } from '../../data/evaluation-criteria';
@@ -10,6 +11,7 @@ interface EmployeeTableProps {
 }
 
 export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories = [], onRowClick }) => {
+    const router = useRouter(); // 🔥 Initialize Router
 
     const getCategoryPercentage = (item: DashboardItem, catId: string) => {
         const scores = item.evaluation?.scores || {};
@@ -52,6 +54,12 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
         }
 
         return 0;
+    };
+
+    const handleNameClick = (e: React.MouseEvent, employeeId: string) => {
+        e.stopPropagation(); // 🛑 Stop row click (filter)
+        // Navigate to Evaluation Page with ID
+        router.push(`/evaluations?employeeId=${employeeId}`);
     };
 
     return (
@@ -97,12 +105,21 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                             return (
                                 <tr
                                     key={item.id}
-                                    className="bg-white border-b hover:bg-orange-50 cursor-pointer transition-colors"
+                                    className="bg-white border-b hover:bg-orange-50 cursor-pointer transition-colors group"
                                     onClick={() => onRowClick && onRowClick(item.employeeId)}
                                 >
                                     <td className="px-6 py-4 font-medium text-slate-900">{index + 1}.</td>
                                     <td className="px-6 py-4">{item.employeeId}</td>
-                                    <td className="px-6 py-4 font-medium text-slate-900">{item.firstName} {item.lastName}</td>
+                                    <td className="px-6 py-4">
+                                        <button
+                                            onClick={(e) => handleNameClick(e, item.employeeId)}
+                                            className="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                                            title="คลิกเพื่อแก้ไขการประเมิน"
+                                        >
+                                            {item.firstName} {item.lastName}
+                                            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-xs">↗</span>
+                                        </button>
+                                    </td>
                                     <td className="px-6 py-4">{item.section}</td>
                                     <td className="px-6 py-4">{item.department}</td>
                                     <td className="px-6 py-4">{item.level}</td>

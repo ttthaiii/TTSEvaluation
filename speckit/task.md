@@ -158,8 +158,18 @@
   2. Implement `useEvaluation` hook for logic
   3. Refactor `evaluations/page.tsx` to use new structure
 - **Confirm Task:**
-  - [x] หน้าเว็บทำงานได้เหมือนเดิม (Functionality Parity)
   - [x] Code สะอาดและอ่านง่ายขึ้น
+
+### [T-023] Link Dashboard to Evaluation Page
+- **Concept:** คลิกชื่อพนักงานใน Dashboard เพื่อไปหน้าประเมินได้ทันที
+- **Principle:** URL Query Parameters (`?employeeId=...`)
+- **Implementation Detail:**
+  1. Update `EmployeeTable` in Dashboard to link name to `/evaluations`.
+  2. Update `useEvaluation` hook to read `employeeId` from URL and auto-select.
+- **Confirm Task:**
+  - [x] Click Name -> Redirects to Evaluation Page.
+  - [x] Evaluation Page auto-selects the correct employee.
+
 
 
 #### Error Log

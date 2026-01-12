@@ -106,4 +106,20 @@
 1. Admin เข้าหน้า `/admin/scoring`
 2. จัดการ "Scoring Variables" (ตัวแปรซับซ้อน เช่น `VAR_LeaveScore`)
 3. จัดการ "Scoring Formulas" (สูตรสุดท้าย เช่น `DisciplineScore = AI_Score + Head_Score`)
-4. ระบบ `EvalPage` จะดึงสูตรเหล่านี้ไปใช้คำนวณ Dynamic
+
+---
+
+## Feature: [F-006] Dashboard Visualization
+**Status:** Implemented
+
+### 1. User Flow
+1. **Overview:** เข้าหน้า `/dashboard` เพื่อดูภาพรวม
+2. **Filtering:** กรอกตาม Section, Grade, หรือ Search Name
+3. **Charts Interaction:**
+   - **Click Grade (Donut):** Filter ตารางและกราฟอื่นให้โชว์เฉพาะเกรดนั้น
+   - **Click Section (Stack Bar):** Filter เฉพาะแผนกนั้น
+4. **Employee Table:**
+   - แสดงรายการพนักงานพร้อมเกรดที่คำนวณได้
+   - **Click Row:** เพื่อ Filter กราฟทั้งหมดให้แสดงเฉพาะคนนั้น
+   - **Click Name:** เพื่อ Link ไปยังหน้าแบบประเมิน (`/evaluations?employeeId=...`) เพื่อแก้ไขคะแนน
+5. **Interactive Charts:** กราฟวงกลมและแท่งสามารถกดเพื่อ Filter dashboard ได้

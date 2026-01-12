@@ -17,6 +17,8 @@
 | **F-005** (Scoring) | T-013 | `src/app/admin/scoring/page.tsx` | CRUD Formulas & **Grade Criteria** |
 | | | `src/hooks/useGradingRules.ts` | **(New)** Hook: Grade Logic & Firestore |
 | | | `Firestore: config_grading_rules` | **(New)** Collection: Grading Rules |
+| **F-006** (Dashboard) | T-023 | `src/app/dashboard/page.tsx` | Dashboard UI |
+| | | `src/components/dashboard/EmployeeTable.tsx` | **Links to Eval Page** |
 
 ## 2. Data / Variable / Component Traceability
 
