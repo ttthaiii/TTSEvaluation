@@ -100,3 +100,22 @@ export const getRawTenure = (startDate: string | Timestamp | null | undefined, t
 
   return { years, months, days, totalDays };
 };
+
+export const formatDateToThai = (dateInput: string | Timestamp | null | undefined): string => {
+  if (!dateInput) return "-";
+
+  let date: Date;
+  if (typeof dateInput === 'object' && 'toDate' in dateInput) {
+    date = dateInput.toDate();
+  } else if (typeof dateInput === 'string') {
+    date = new Date(dateInput);
+  } else {
+    return "-";
+  }
+
+  return date.toLocaleDateString('th-TH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};

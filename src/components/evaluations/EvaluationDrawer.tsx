@@ -113,7 +113,7 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
 
                             {/* Info & Stats */}
                             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                                <EmployeeInfoCard employee={selectedEmployee} evalYear={evalYear} />
+                                <EmployeeInfoCard employee={selectedEmployee} evalYear={evalYear} isCompact={true} />
 
                                 {employeeStats && (
                                     <div className="mt-6 pt-6 border-t border-slate-50">

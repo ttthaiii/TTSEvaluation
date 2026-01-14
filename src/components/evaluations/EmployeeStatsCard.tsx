@@ -52,7 +52,7 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                 <div className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm ${isCompact ? 'text-left pl-5' : 'text-center'}`}>
                     <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-1">ใบเตือน</p>
                     <p className={`text-2xl font-bold ${stats.warningCount > 0 ? 'text-rose-500' : 'text-slate-700'}`}>
-                        {stats.warningCount} <span className="text-sm font-medium text-slate-300">ใบ</span>
+                        {stats.warningCount || 0} <span className="text-sm font-medium text-slate-300">ใบ</span>
                     </p>
                 </div>
             </div>
