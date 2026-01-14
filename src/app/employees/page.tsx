@@ -126,7 +126,9 @@ export default function EmployeeListPage() {
                     totalAbsentDays: d.totalAbsentDays || 0,
                     evaluationScore: evalScore !== undefined ? evalScore : null,
                     isEvaluator: isEvaluator, // Extra Field for Logic
-                    pdNumber: d.pdNumber || "" // [T-030]
+                    pdNumber: d.pdNumber || "", // [T-030]
+                    birthDate: d.birthDate || null,
+                    age: d.age || 0,
                 } as any;
             });
 
@@ -723,11 +725,41 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     if (positionIdx !== -1) userData.position = String(row[positionIdx] || '').trim();
                     if (sectionIdx !== -1) userData.section = String(row[sectionIdx] || '').trim();
                     if (deptIdx !== -1) userData.department = String(row[deptIdx] || '').trim();
-                    if (levelIdx !== -1) userData.level = String(row[levelIdx] || '').trim();
+                    if (deptIdx !== -1) userData.department = String(row[deptIdx] || '').trim();
+                    if (levelIdx !== -1) {
+                        // 🔥 Level Mapping Logic
+                        let rawLevel = String(row[levelIdx] || '').trim();
+                        const lowerLevel = rawLevel.toLowerCase().replace(/\s/g, ''); // remove spaces for comparison
+
+                        if (lowerLevel === 'level1') {
+                            userData.level = 'Monthly Staff';
+                        } else if (lowerLevel === 'level2') {
+                            userData.level = 'Supervisor';
+                        } else if (lowerLevel === 'level3') {
+                            userData.level = 'Management';
+                        } else {
+                            userData.level = rawLevel; // Keep original if no match (e.g. valid values)
+                        }
+                    }
                     if (pdNoIdx !== -1) userData.pdNumber = String(row[pdNoIdx] || '').trim();
 
                     if (evalIdIdx !== -1) userData.evaluatorId = String(row[evalIdIdx] || '').trim();
                     if (evalNameIdx !== -1) userData.evaluatorName = String(row[evalNameIdx] || '').trim();
+
+                    // 🔥 New Fields: Birthday & Age
+                    const birthDateIdx = findCol(["วันเดือนปีเกิด", "BirthDate", "DOB"]);
+                    const ageIdx = findCol(["อายุ", "Age"]);
+
+                    if (birthDateIdx !== -1) {
+                        const dateVal = parseDate(row[birthDateIdx]);
+                        if (dateVal) userData.birthDate = dateVal;
+                    }
+
+                    if (ageIdx !== -1) {
+                        const rawAge = row[ageIdx];
+                        const ageNum = parseInt(String(rawAge).trim());
+                        if (!isNaN(ageNum)) userData.age = ageNum;
+                    }
 
                     if (startIdx !== -1) {
                         const dateVal = parseDate(row[startIdx]);

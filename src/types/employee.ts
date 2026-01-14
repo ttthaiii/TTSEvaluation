@@ -16,4 +16,6 @@ export interface Employee {
   evaluatorName?: string;
   pdNumber?: string;
   isEvaluator?: boolean; // Added for UI logic
+  birthDate?: string | Timestamp | null; // Added field
+  age?: number; // Added field
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Employee } from '../../types/employee';
-import { calculateServiceTenure, formatDateToThai } from '../../utils/dateUtils';
+import { calculateServiceTenure, formatDateToThai, calculateAge } from '../../utils/dateUtils';
 
 interface EmployeeInfoCardProps {
     employee: Employee;
@@ -56,6 +56,12 @@ export const EmployeeInfoCard: React.FC<EmployeeInfoCardProps> = ({ employee, ev
                 <div className={`inline-flex items-center px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-lg ${isCompact ? 'text-sm' : 'text-base'} font-medium`}>
                     {employee.level}
                 </div>
+            </div>
+            <div>
+                <p className="text-slate-400 font-semibold text-xs tracking-wider uppercase mb-1">อายุ (ปี)</p>
+                <p className={`${contentSize} font-medium text-slate-700`}>
+                    {employee.birthDate ? `${calculateAge(employee.birthDate)} ปี` : '-'}
+                </p>
             </div>
             <div>
                 <p className="text-slate-400 font-semibold text-xs tracking-wider uppercase mb-1">อายุงาน</p>

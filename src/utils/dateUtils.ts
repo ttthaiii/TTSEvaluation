@@ -119,3 +119,26 @@ export const formatDateToThai = (dateInput: string | Timestamp | null | undefine
     day: 'numeric',
   });
 };
+
+export const calculateAge = (birthDate: string | Timestamp | null | undefined): number => {
+  if (!birthDate) return 0;
+
+  let birth: Date;
+  if (typeof birthDate === 'object' && 'toDate' in birthDate) {
+    birth = birthDate.toDate();
+  } else if (typeof birthDate === 'string') {
+    birth = new Date(birthDate);
+  } else {
+    return 0;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+
+  return age;
+};

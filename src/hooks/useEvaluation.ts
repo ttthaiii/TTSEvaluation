@@ -75,6 +75,8 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                     isActive: d.isActive ?? true,
                     evaluatorId: d.evaluatorId || "", // Ensure field exists
                     pdNumber: d.pdNumber || "", // [T-030] Map PdNumber
+                    birthDate: d.birthDate || null, // [T-Fix] Map birthDate for Age Calculation
+                    age: d.age || 0, // [T-Fix] Map raw age (fallback)
                 } as Employee);
             });
 
