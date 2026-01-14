@@ -1,34 +1,58 @@
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAdminAuth } from "@/lib/firebase-admin";
-import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
-        // 1. Verify NextAuth Session
+        console.log("🔐 Starting token creation...");
+
         const session = await auth();
 
         if (!session || !session.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            console.log("❌ No session found");
+            return NextResponse.json(
+                { error: "Unauthorized: No session" },
+                { status: 401 }
+            );
         }
 
-        const userId = (session.user as any).employeeId || session.user.email;
+        // ✅ เพิ่ม validation และ type guard
+        const userId = session.user.employeeId || session.user.email;
+
         if (!userId) {
-            return NextResponse.json({ error: "No User ID found" }, { status: 400 });
+            console.log("❌ No user ID found");
+            return NextResponse.json(
+                { error: "Unauthorized: No user identifier" },
+                { status: 401 }
+            );
         }
 
-        // 2. Create Custom Token via Admin SDK (Lazy Init)
+        console.log("📝 Creating token for user:", userId);
+
         const adminAuth = getAdminAuth();
+        console.log("✅ Firebase Admin Auth instance ready");
 
-        // We use the employeeId as the Firebase UID to keep things consistent
-        const firebaseToken = await adminAuth.createCustomToken(userId, {
-            role: (session.user as any).role || 'User',
-            name: session.user.name
+        // ✅ ตอนนี้ TypeScript รู้แล้วว่า userId เป็น string แน่นอน
+        const customToken = await adminAuth.createCustomToken(userId);
+        console.log("✅ Custom token created");
+
+        return NextResponse.json({
+            token: customToken,
+            uid: userId,
         });
+    } catch (error: any) {
+        console.error("❌ Error in firebase-token route:");
+        console.error("Message:", error.message);
+        console.error("Code:", error.code);
+        console.error("Stack:", error.stack);
 
-        return NextResponse.json({ token: firebaseToken });
-
-    } catch (error) {
-        console.error("Error minting token:", error);
-        return NextResponse.json({ error: "Internal Server Error: " + (error instanceof Error ? error.message : String(error)) }, { status: 500 });
+        return NextResponse.json(
+            {
+                error: "Internal Server Error",
+                message: error.message,
+                code: error.code,
+            },
+            { status: 500 }
+        );
     }
 }

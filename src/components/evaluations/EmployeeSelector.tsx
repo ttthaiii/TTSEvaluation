@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Employee } from '../../types/employee';
+import { SearchableSelect } from '../ui/SearchableSelect';
 
 interface EmployeeSelectorProps {
     sections: string[];
@@ -22,53 +23,64 @@ export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({
     existingEvaluations,
     completedEvaluationIds
 }) => {
+    // Transform Sections to Options
+    const sectionOptions = useMemo(() =>
+        sections.map(s => ({ value: s, label: s })),
+        [sections]
+    );
+
+    // Transform Employees to Options
+    const employeeOptions = useMemo(() =>
+        filteredEmployees.map(emp => {
+            const isComplete = completedEvaluationIds.has(emp.id);
+            return {
+                value: emp.id,
+                label: `${isComplete ? "✅ " : ""}${emp.employeeId} - ${emp.firstName} ${emp.lastName}`,
+                searchTerms: `${emp.employeeId} ${emp.firstName} ${emp.lastName}`, // Allows searching by ID, First, or Last name
+                statusColor: isComplete ? 'text-green-600 font-medium' : undefined
+            };
+        }),
+        [filteredEmployees, completedEvaluationIds]
+    );
+
+    // Initial check for section validity
+    // If selectedSection is not in options, we might want to warn or just let it be.
+
+    const handleSectionChange = (newValue: string) => {
+        // Create synthetic event to match existing interface
+        const event = {
+            target: { value: newValue }
+        } as React.ChangeEvent<HTMLSelectElement>;
+        onSectionChange(event);
+    };
+
+    const handleEmployeeChange = (newValue: string) => {
+        const event = {
+            target: { value: newValue }
+        } as React.ChangeEvent<HTMLSelectElement>;
+        onEmployeeChange(event);
+    };
+
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                    <label className="block text-slate-700 font-semibold text-base">เลือกส่วนงาน (Section)</label>
-                    <div className="relative">
-                        <select
-                            className="w-full pl-4 pr-10 py-3.5 text-base border-gray-200 rounded-xl text-slate-700 bg-gray-50 focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-50/50 outline-none transition-all appearance-none cursor-pointer"
-                            value={selectedSection}
-                            onChange={onSectionChange}
-                        >
-                            <option value="">-- กรุณาเลือกส่วนงาน --</option>
-                            {sections.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
+                <SearchableSelect
+                    label="เลือกส่วนงาน (Section)"
+                    placeholder="ค้นหาหรือเลือกส่วนงาน..."
+                    options={sectionOptions}
+                    value={selectedSection}
+                    onChange={handleSectionChange}
+                />
 
                 {selectedSection && (
-                    <div className="space-y-2 animate-in slide-in-from-top-2 fade-in duration-300">
-                        <label className="block text-slate-700 font-semibold text-base">เลือกพนักงานที่ต้องการประเมิน</label>
-                        <div className="relative">
-                            <select
-                                className="w-full pl-4 pr-10 py-3.5 text-base border-gray-200 rounded-xl text-slate-700 bg-gray-50 focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-50/50 outline-none transition-all appearance-none cursor-pointer"
-                                value={selectedEmployeeId}
-                                onChange={onEmployeeChange}
-                            >
-                                <option value="">-- เลือกรายชื่อ --</option>
-                                {filteredEmployees.map(emp => {
-                                    const isComplete = completedEvaluationIds.has(emp.id);
-                                    return (
-                                        <option key={emp.id} value={emp.id} className={isComplete ? 'text-green-600 font-medium' : ''}>
-                                            {isComplete ? "✅ " : ""}{emp.employeeId} - {emp.firstName} {emp.lastName}
-                                        </option>
-                                    );
-                                })}
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                                </svg>
-                            </div>
-                        </div>
+                    <div className="animate-in slide-in-from-top-2 fade-in duration-300">
+                        <SearchableSelect
+                            label="เลือกพนักงานที่ต้องการประเมิน"
+                            placeholder="พิมพ์รหัส, ชื่อ หรือนามสกุล..."
+                            options={employeeOptions}
+                            value={selectedEmployeeId}
+                            onChange={handleEmployeeChange}
+                        />
                     </div>
                 )}
             </div>

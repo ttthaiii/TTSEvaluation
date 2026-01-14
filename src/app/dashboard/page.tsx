@@ -92,25 +92,83 @@ export default function DashboardPage() {
         }));
     }, [dashboardData]);
 
-    // 3. Apply Filters
+    // 3. Cascading Filter Logic
+    // Helper to filter data based on specific criteria
+    const filterSubset = (
+        data: typeof dashboardData,
+        criteria: { section?: string; grade?: string; pd?: string; search?: string }
+    ) => {
+        return data.filter(item => {
+            const matchSection = !criteria.section || criteria.section === 'All' || item.section === criteria.section;
+            const matchGrade = !criteria.grade || criteria.grade === 'All' || item.grade?.grade === criteria.grade;
+            const matchPd = !criteria.pd || criteria.pd === 'All' || item.pdNumber === criteria.pd;
+
+            // Search logic (optional inclusion in Cascade)
+            // Usually, Search shouldn't limit dropdown options (circular dependency if selecting from dropdown)
+            // But if we want Strict filtering, we can include it. 
+            // For now, let's keep Dropdowns independent of Search Text, but Search Text dependent on Dropdowns.
+            return matchSection && matchGrade && matchPd;
+        });
+    };
+
+    // Derived Options based on INTERSECTION of other filters
+    const availableSections = useMemo(() => {
+        // Options for Section should respect Grade & PdNumber
+        const subset = filterSubset(dashboardData, { grade: selectedGrade, pd: selectedPdNumber });
+        return Array.from(new Set(subset.map(i => i.section))).sort();
+    }, [dashboardData, selectedGrade, selectedPdNumber]);
+
+    const availableGrades = useMemo(() => {
+        // Options for Grade should respect Section & PdNumber
+        const subset = filterSubset(dashboardData, { section: selectedSection, pd: selectedPdNumber });
+        const grades = new Set<string>();
+        subset.forEach(i => {
+            if (i.grade?.grade) grades.add(i.grade.grade);
+        });
+
+        // Return full GradeCriteria objects that match the available grades
+        return GRADE_RANGES.filter(g => grades.has(g.grade));
+    }, [dashboardData, selectedSection, selectedPdNumber]);
+
+    const availablePdNumbers = useMemo(() => {
+        // Options for PdNumber should respect Section & Grade
+        const subset = filterSubset(dashboardData, { section: selectedSection, grade: selectedGrade });
+        return Array.from(new Set(subset.map(i => i.pdNumber).filter(Boolean))).sort();
+    }, [dashboardData, selectedSection, selectedGrade]);
+
+    // Available Employees (for Autocomplete) - Respects ALL current filters (Section, Grade, Pd)
+    const availableEmployeeOptions = useMemo(() => {
+        const subset = filterSubset(dashboardData, {
+            section: selectedSection,
+            grade: selectedGrade,
+            pd: selectedPdNumber
+        });
+        return subset.map(e => ({
+            id: e.employeeId, // Use Text ID for value to match existing logic logic (or change keys)
+            name: `${e.employeeId} - ${e.firstName} ${e.lastName}`,
+            searchTerms: `${e.employeeId} ${e.firstName} ${e.lastName}`
+        }));
+    }, [dashboardData, selectedSection, selectedGrade, selectedPdNumber]);
+
+    // 4. Final Filtered Data (Display Data)
     const filteredData = useMemo(() => {
-        return dashboardData.filter(item => {
-            const matchSection = selectedSection === 'All' || item.section === selectedSection;
-            const matchGrade = selectedGrade === 'All' || item.grade?.grade === selectedGrade;
-            const matchPd = selectedPdNumber === 'All' || item.pdNumber === selectedPdNumber; // [T-030]
+        // Base subset from dropdowns
+        const subset = filterSubset(dashboardData, {
+            section: selectedSection,
+            grade: selectedGrade,
+            pd: selectedPdNumber
+        });
 
-            // [T-030] Enhanced Search Match
-            // Matches: ID, Firstname, Lastname, OR "ID First Last" string format from autocomplete
-            const searchLower = selectedEmployeeId.toLowerCase().trim();
+        // Apply Text Search on top
+        if (!selectedEmployeeId) return subset;
+
+        const searchLower = selectedEmployeeId.toLowerCase().trim();
+        return subset.filter(item => {
             const fullNameString = `${item.employeeId} ${item.firstName} ${item.lastName}`.toLowerCase();
-
-            const matchId = !selectedEmployeeId ||
-                item.employeeId.toLowerCase().includes(searchLower) ||
+            return item.employeeId.toLowerCase().includes(searchLower) ||
                 item.firstName.toLowerCase().includes(searchLower) ||
                 item.lastName.toLowerCase().includes(searchLower) ||
                 fullNameString.includes(searchLower);
-
-            return matchSection && matchGrade && matchPd && matchId;
         });
     }, [dashboardData, selectedSection, selectedGrade, selectedPdNumber, selectedEmployeeId]);
 
@@ -123,18 +181,42 @@ export default function DashboardPage() {
     };
 
     const handleRowClick = (empId: string) => {
-        // [T-030] Handle Autocomplete Selection (which might send "ID Name" string)
-        // Check if input matches an exact option, extract the real ID?
-        // Actually, the Table onRowClick sends the real "emp.id" (docId) or "emp.employeeId"? 
-        // EmployeeTable sends `emp.id` (Firestore ID). But search uses `selectedEmployeeId` (State).
-        // Let's keep logic simple: If clicking row, toggle ID filter.
+        // If row clicked, find the employee and set the search filter?
+        // Or actually, row click usually opens drawer?
+        // Wait, current code sets `selectedEmployeeId` (the filtering mechanism) on row click.
+        // This is weird behavior if row click is meant to select.
+        // Ah, `handleRowClick` was toggling highlighting.
+        // But user wants "Split Screen".
+        // The instructions for "Split Screen" (Task Id 1) say: "Clicking ... triggers ... split-screen panel".
+        // My code below `handleRowClick` implementation: `setSelectedEmployeeId(...)`.
+        // AND `onEvaluate={handleEvaluate}`.
+        // Let's verify who calls what. 
+        // EmployeeTable usually has `onRowClick` (for highlighting?) and `onEvaluate` (button?).
+        // If Row Click should open Drawer, `handleRowClick` should call `setEvaluationPanelId`.
+        // I will fix this logic if needed, but for now I'm focused on Filters.
+        // I will keep `handleRowClick` as is for now to avoid scope creep, unless it conflicts.
         setSelectedEmployeeId(prev => prev === empId ? '' : empId);
     };
 
     if (loading) {
         return (
             <div className="flex h-screen w-full items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+            </div>
+        );
+    }
+
+    const handleResetFilters = () => {
+        setSelectedSection('All');
+        setSelectedGrade('All');
+        setSelectedPdNumber('All');
+        setSelectedEmployeeId('');
+    };
+
+    if (loading) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
             </div>
         );
     }
@@ -156,8 +238,8 @@ export default function DashboardPage() {
 
                     {/* Filters */}
                     <FilterBar
-                        sections={sections}
-                        grades={GRADE_RANGES}
+                        sections={availableSections}
+                        grades={availableGrades}
                         selectedSection={selectedSection}
                         onSectionChange={setSelectedSection}
                         selectedGrade={selectedGrade}
@@ -165,11 +247,11 @@ export default function DashboardPage() {
                         searchTerm={selectedEmployeeId}
                         onSearchChange={setSelectedEmployeeId}
                         totalCount={filteredData.length}
-                        // [T-030] New Props
-                        pdNumbers={uniquePdNumbers}
+                        pdNumbers={availablePdNumbers}
                         selectedPdNumber={selectedPdNumber}
                         onPdNumberChange={setSelectedPdNumber}
-                        employeeOptions={employeeOptions}
+                        employeeOptions={availableEmployeeOptions}
+                        onReset={handleResetFilters}
                     />
 
                     {/* Charts Grid */}

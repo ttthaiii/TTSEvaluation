@@ -16,7 +16,7 @@ export const Dialog: React.FC<DialogProps> = ({ isOpen, mode, title, message, on
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm transition-opacity animate-in fade-in duration-200">
             <div
                 className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all animate-in zoom-in-95 duration-200 border border-slate-100"
                 onClick={(e) => e.stopPropagation()}

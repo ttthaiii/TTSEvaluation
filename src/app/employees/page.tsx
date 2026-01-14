@@ -863,7 +863,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className={`bg-white rounded-xl shadow-2xl w-full ${tableRows.length > 0 ? 'max-w-6xl' : 'max-w-lg'} overflow-hidden transition-all duration-300`}>
                 <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
                     <h3 className="font-semibold text-lg text-gray-800">

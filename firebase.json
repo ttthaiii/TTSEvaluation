@@ -10,7 +10,10 @@
             "**/node_modules/**"
         ],
         "frameworksBackend": {
-            "region": "asia-southeast1"
+            "region": "asia-southeast1",
+            "env": {
+                "APP_SERVICE_ACCOUNT_KEY": "secret:APP_SERVICE_ACCOUNT_KEY"
+            }
         }
     }
 }

@@ -74,7 +74,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
 
             // Set Security Fields
             if (ud) {
-                setUsername(ud.username || employeeId || ''); // Default to employeeId if no custom username
+                setUsername(ud.username || ud.employeeId || ''); // Default to employeeId (field) if no custom username
             } else {
                 setUsername(''); // Reset if no user doc
             }
@@ -141,7 +141,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in">
                 {/* Header */}
                 <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">

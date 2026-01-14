@@ -383,7 +383,7 @@ export default function CriteriaManagementPage() {
 
             {/* --- Modal Edit Category --- */}
             {editingCat && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
                     <div className="bg-white p-6 rounded-lg w-96 space-y-4">
                         <h3 className="font-bold text-lg">จัดการหมวดหมู่</h3>
                         <input className="border w-full p-2 rounded" placeholder="ID (เช่น A, B)" value={editingCat.id} onChange={e => setEditingCat({ ...editingCat, id: e.target.value })} disabled={categories.some(c => c.id === editingCat.id && c.id !== editingCat.id)} />
@@ -398,7 +398,7 @@ export default function CriteriaManagementPage() {
 
             {/* --- Modal Edit Question --- */}
             {editingQuestion && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
                     <div className="bg-white p-6 rounded-lg w-[600px] space-y-4">
                         <h3 className="font-bold text-lg">จัดการหัวข้อประเมิน</h3>
                         <div className="flex gap-4">

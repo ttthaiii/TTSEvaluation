@@ -1,52 +1,45 @@
-'use client';
+"use client";
 
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
-import { signInWithCustomToken, signOut as firebaseSignOut } from "firebase/auth";
-import { auth } from "@/lib/firebase"; // Client SDK
+import { signInWithCustomToken, signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export default function FirebaseAuthSync() {
     const { data: session, status } = useSession();
 
     useEffect(() => {
-        const syncAuth = async () => {
-            if (status === 'authenticated' && session) {
+        (async () => {
+            if (status === "authenticated" && session) {
                 try {
-                    // 1. Check if already signed in to Firebase with correct user
                     const currentUser = auth.currentUser;
-                    const sessionUid = (session.user as any).employeeId || session.user.email;
+                    const sessionUserId = session.user.employeeId || session.user.email;
 
-                    if (currentUser && currentUser.uid === sessionUid) {
-                        return; // Already synced
+                    if (currentUser && currentUser.uid === sessionUserId) {
+                        return;
                     }
 
                     console.log("🔄 Syncing Firebase Auth...");
 
-                    const response = await fetch('/api/auth/firebase-token');
+                    // ✅ ไม่ต้องส่ง Authorization header เพราะใช้ session cookie
+                    const response = await fetch("/api/auth/firebase-token");
+
                     if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error || `Failed to fetch token: ${response.status}`);
+                        const error = await response.json().catch(() => ({}));
+                        throw new Error(error.error || `Failed to fetch token: ${response.status}`);
                     }
 
                     const { token } = await response.json();
-
-                    // 3. Sign in to Firebase Client SDK
                     await signInWithCustomToken(auth, token);
                     console.log("✅ Firebase Auth Synced!");
-
-                } catch (error) {
+                } catch (error: any) {
                     console.error("❌ Firebase Sync Error:", error);
                 }
-            } else if (status === 'unauthenticated') {
-                // Logout from Firebase if NextAuth is logged out
-                if (auth.currentUser) {
-                    await firebaseSignOut(auth);
-                }
+            } else if (status === "unauthenticated" && auth.currentUser) {
+                await signOut(auth);
             }
-        };
-
-        syncAuth();
+        })();
     }, [session, status]);
 
-    return null; // This component renders nothing
+    return null;
 }

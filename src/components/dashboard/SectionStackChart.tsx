@@ -46,7 +46,7 @@ export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data, onSe
     // Use centralized colors
     const COLORS = GRADE_COLOR_MAP;
 
-    const gradeKeys = ['N/A', 'NI', 'BE', 'ME', 'OE', 'E'];
+    const gradeKeys = ['NI', 'BE', 'ME', 'OE', 'E'];
 
     const handleBarClick = (data: any) => {
         if (!drillDownPd) {
