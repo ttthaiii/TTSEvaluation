@@ -960,27 +960,30 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     // Map Data
                     // [T-History] ตรวจหาคอลัมน์ผลประเมินปี 2024 (Ultra Flexible)
                     // Normalize header: remove spaces/newlines, lower case
+
+                    // 1. Find SCORE Column (Keywords: "score", "คะแนน")
+                    // Must match "2024" AND ("score" OR "คะแนน")
+                    // Should NOT match "grade" or "ผล" (except "ผลคะแนน" which technically has score intent)
                     const score2024Idx = headerStr.findIndex(h => {
-                        const norm = String(h).replace(/\s/g, '').toLowerCase(); // "ผลการประเมินปี2024"
+                        const norm = String(h).replace(/\s/g, '').toLowerCase();
                         return norm.includes("2024") && (
-                            norm.includes("score") ||
-                            norm.includes("grade") ||
-                            norm.includes("คะแนน") ||
-                            norm.includes("ประเมิน") ||
-                            norm.includes("result")
+                            norm.includes("score") || norm.includes("คะแนน")
+                        ) && !norm.includes("grade") && !norm.includes("เกรด");
+                    });
+
+                    // 2. Find GRADE Column (Keywords: "grade", "เกรด")
+                    const grade2024Idx = headerStr.findIndex(h => {
+                        const norm = String(h).replace(/\s/g, '').toLowerCase();
+                        return norm.includes("2024") && (
+                            norm.includes("grade") || norm.includes("เกรด") || norm.includes("ผล")
                         );
                     });
 
-                    // Grade specific (Optional, prefer Score above if ambiguous)
-                    const grade2024Idx = headerStr.findIndex(h => {
-                        const norm = String(h).replace(/\s/g, '').toLowerCase();
-                        return norm.includes("2024") && (norm.includes("grade") || norm.includes("เกรด") || norm.includes("rank"));
-                    });
-
-                    console.log("DEBUG: 2024 Import Check V2", {
+                    console.log("DEBUG: 2024 Import Check V3", {
                         headers: headerStr,
                         normalizedHeaders: headerStr.map(h => String(h).replace(/\s/g, '').toLowerCase()),
-                        scoreIndex: score2024Idx
+                        scoreIndex: score2024Idx,
+                        gradeIndex: grade2024Idx
                     });
 
                     // 🔥 Map Data logic starts here
@@ -999,24 +1002,27 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     const targetUserId = targetUserRef.id;
 
                     if (score2024Idx !== -1 || grade2024Idx !== -1) {
-                        // ดึงค่า Raw ออกมาก่อน (อาจจะเป็น Score หรือ Grade ก็ได้)
-                        const rawValue = score2024Idx !== -1 ? String(row[score2024Idx]).trim() : "";
-                        const explicitGrade = grade2024Idx !== -1 ? String(row[grade2024Idx]).trim() : "";
-
-                        // พยายามแปลงเป็นตัวเลข
-                        const parsedScore = parseFloat(rawValue.replace(/,/g, ''));
-
-                        // Decision Logic:
-                        // 1. ถ้าแปลงเป็นตัวเลขได้ -> เป็น Total Score
-                        // 2. ถ้าแปลงไม่ได้ (เช่น "A", "B", "Excellent") -> เป็น Final Grade
                         let finalScore = 0;
-                        let finalGrade = explicitGrade;
+                        let finalGrade = "";
 
-                        if (!isNaN(parsedScore)) {
-                            finalScore = parsedScore;
-                        } else if (rawValue) {
-                            // ถ้าแปลงเลขไม่ได้ แต่มีค่า -> ถือว่าเป็น Grade (กรณีคอลัมน์เดียว)
-                            finalGrade = rawValue;
+                        // 1. Extract Score (Priority: Numeric from Score Col)
+                        if (score2024Idx !== -1) {
+                            const rawScore = String(row[score2024Idx]).trim();
+                            const parsed = parseFloat(rawScore.replace(/,/g, ''));
+                            if (!isNaN(parsed)) {
+                                finalScore = parsed;
+                            }
+                        }
+
+                        // 2. Extract Grade (Priority: String from Grade Col)
+                        if (grade2024Idx !== -1) {
+                            finalGrade = String(row[grade2024Idx]).trim();
+                        } else if (finalScore === 0 && score2024Idx !== -1) {
+                            // Fallback: If score col found but parsed as NaN (e.g. "A"), treat score col as Grade
+                            const rawVal = String(row[score2024Idx]).trim();
+                            if (isNaN(parseFloat(rawVal.replace(/,/g, ''))) && rawVal.length > 0) {
+                                finalGrade = rawVal;
+                            }
                         }
 
                         // บันทึกเมื่อมีข้อมูลอย่างใดอย่างหนึ่ง

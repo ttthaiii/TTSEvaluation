@@ -13,6 +13,8 @@ import { Loader2 } from 'lucide-react';
 import { EvaluationDrawer } from '../../components/evaluations/EvaluationDrawer'; // 🔥 Import Drawer
 import { Employee } from '@/types/employee';
 import { EvaluationRecord } from '@/types/evaluation';
+import { collection, query, where, getDocs } from 'firebase/firestore'; // 🔥 Import Firestore
+import { db } from '@/lib/firebase'; // 🔥 Import DB instance
 
 export default function DashboardPage() {
     const {
@@ -32,6 +34,58 @@ export default function DashboardPage() {
     const [selectedPdNumber, setSelectedPdNumber] = useState<string>('All'); // [T-030]
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
     const [evaluationPanelId, setEvaluationPanelId] = useState<string | null>(null); // 🔥 Drawer State
+
+    // [T-History] Comparison State
+    const [isCompareMode, setIsCompareMode] = useState(false);
+    const [selectedYears, setSelectedYears] = useState<string[]>(['2024']);
+    const [historicalData, setHistoricalData] = useState<Map<string, Map<number, { score: number, grade: string }>>>(new Map());
+
+    // [T-History] Fetch History
+    React.useEffect(() => {
+        if (!isCompareMode || selectedYears.length === 0) {
+            setHistoricalData(new Map());
+            return;
+        }
+
+        const fetchHistory = async () => {
+            try {
+                const numericYears = selectedYears.map(y => parseInt(y));
+                const q = query(
+                    collection(db, 'evaluations'),
+                    where('evaluationYear', 'in', numericYears)
+                );
+
+                const snapshot = await getDocs(q);
+                const historyMap = new Map<string, Map<number, { score: number, grade: string }>>();
+
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    // Supports both 'employeeId' (legacy/string ID) or 'employeeDocId' (auth ID).
+                    // Employee List used 'employeeDocId'. Use 'employeeDocId' if available for consistency with generic ID.
+                    // But our emp objects here have 'id' (docId) and 'employeeId' (code).
+                    // Let's key by 'docId' (item.id in dashboardData).
+                    const docId = data.employeeDocId;
+
+                    if (docId) {
+                        if (!historyMap.has(docId)) {
+                            historyMap.set(docId, new Map());
+                        }
+                        historyMap.get(docId)?.set(data.evaluationYear, {
+                            score: data.totalScore || 0,
+                            grade: data.finalGrade || "-"
+                        });
+                    }
+                });
+
+                setHistoricalData(historyMap);
+
+            } catch (error) {
+                console.error("Error fetching history:", error);
+            }
+        };
+
+        fetchHistory();
+    }, [isCompareMode, selectedYears]);
 
     // 2. Prepare Data for Dashboard (Map ALL employees)
     const dashboardData = useMemo(() => {
@@ -70,10 +124,11 @@ export default function DashboardPage() {
                 ...emp,
                 evaluation,
                 grade,
-                totalScore
+                totalScore,
+                history: historicalData.get(emp.id) ? Object.fromEntries(historicalData.get(emp.id)!) : undefined // [T-History] Inject History
             };
         });
-    }, [employees, existingEvaluations]);
+    }, [employees, existingEvaluations, historicalData]);
 
     // [T-030] Extract Unique PdNumbers
     const uniquePdNumbers = useMemo(() => {
@@ -133,7 +188,7 @@ export default function DashboardPage() {
     const availablePdNumbers = useMemo(() => {
         // Options for PdNumber should respect Section & Grade
         const subset = filterSubset(dashboardData, { section: selectedSection, grade: selectedGrade });
-        return Array.from(new Set(subset.map(i => i.pdNumber).filter(Boolean))).sort();
+        return Array.from(new Set(subset.map(i => i.pdNumber).filter((p): p is string => !!p))).sort();
     }, [dashboardData, selectedSection, selectedGrade]);
 
     // Available Employees (for Autocomplete) - Respects ALL current filters (Section, Grade, Pd)
@@ -252,6 +307,17 @@ export default function DashboardPage() {
                         onPdNumberChange={setSelectedPdNumber}
                         employeeOptions={availableEmployeeOptions}
                         onReset={handleResetFilters}
+                        // [T-History] Props
+                        isCompareMode={isCompareMode}
+                        onCompareModeChange={setIsCompareMode}
+                        selectedYears={selectedYears}
+                        onYearChange={(year) => {
+                            if (selectedYears.includes(year)) {
+                                setSelectedYears(prev => prev.filter(y => y !== year).sort());
+                            } else {
+                                setSelectedYears(prev => [...prev, year].sort());
+                            }
+                        }}
                     />
 
                     {/* Charts Grid */}
@@ -291,6 +357,7 @@ export default function DashboardPage() {
                             categories={categories}
                             onRowClick={handleRowClick}
                             onEvaluate={handleEvaluate} // 🔥 Capture Click
+                            compareYears={isCompareMode ? selectedYears : []} // [T-History] Pass Years
                         />
                     </div>
                 </div>

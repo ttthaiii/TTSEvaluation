@@ -3,15 +3,18 @@ import { useRouter } from 'next/navigation'; // 🔥 Import useRouter
 import { DashboardItem } from '@/types/dashboard';
 import { Category } from '@/types/evaluation';
 import { HO_SECTIONS } from '../../data/evaluation-criteria';
+import { GRADE_RANGES } from '@/utils/grade-calculation'; // 🔥 Import Grade Ranges
 
 interface EmployeeTableProps {
     data: DashboardItem[];
     categories?: Category[];
     onRowClick?: (employeeId: string) => void;
     onEvaluate?: (employeeId: string) => void;
+    // [T-History] Comparison
+    compareYears?: string[];
 }
 
-export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories = [], onRowClick, onEvaluate }) => {
+export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories = [], onRowClick, onEvaluate, compareYears = [] }) => {
     const router = useRouter(); // 🔥 Initialize Router
 
     const getCategoryPercentage = (item: DashboardItem, catId: string) => {
@@ -75,6 +78,12 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                         <th className="px-6 py-3">ชื่อส่วน</th>
                         <th className="px-6 py-3">ชื่อแผนก</th>
                         <th className="px-6 py-3">Level</th>
+                        {/* [T-History] Dynamic History Headers */}
+                        {compareYears.map(year => (
+                            <th key={year} className="px-6 py-3 text-center bg-orange-50/50 text-orange-800 border-x border-orange-100 min-w-[80px]">
+                                เกรด {year}
+                            </th>
+                        ))}
                         <th className="px-6 py-3">เกรด</th>
                         <th className="px-6 py-3">วันที่ประเมิน</th>
                         <th className="px-6 py-3 text-center">คะแนนสุทธิ (%)</th>
@@ -146,6 +155,27 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                                     <td className="px-6 py-4">{item.section}</td>
                                     <td className="px-6 py-4">{item.department}</td>
                                     <td className="px-6 py-4">{item.level}</td>
+
+                                    {/* [T-History] Dynamic History Cells */}
+                                    {compareYears.map(year => {
+                                        const hData = item.history?.[year];
+                                        const gradeStr = hData?.grade;
+                                        // Find color class
+                                        const gradeCriteria = GRADE_RANGES.find(g => g.grade === gradeStr);
+                                        const bgClass = gradeCriteria?.bgClass || 'bg-gray-100';
+                                        const textClass = gradeCriteria?.colorClass || 'text-gray-500';
+
+                                        return (
+                                            <td key={year} className="px-6 py-4 text-center border-x border-dashed border-gray-100">
+                                                {gradeStr ? (
+                                                    <span className={`px-2 py-1 rounded text-xs font-bold ${bgClass} ${textClass}`}>
+                                                        {gradeStr}
+                                                    </span>
+                                                ) : <span className="text-gray-300">-</span>}
+                                            </td>
+                                        );
+                                    })}
+
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 rounded text-xs font-semibold ${item.grade?.bgClass} ${item.grade?.colorClass}`}>
                                             {item.grade?.grade || '-'}

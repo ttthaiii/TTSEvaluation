@@ -7,4 +7,5 @@ export interface DashboardItem extends Employee {
     evaluation?: EvaluationRecord;
     grade: GradeCriteria | null;
     totalScore: number;
+    history?: Record<string, { score: number; grade: string }>; // [T-History]
 }

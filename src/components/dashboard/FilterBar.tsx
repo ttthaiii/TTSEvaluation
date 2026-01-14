@@ -18,6 +18,11 @@ interface FilterBarProps {
     onPdNumberChange: (val: string) => void;
     employeeOptions: { id: string; name: string; searchTerms?: string }[];
     onReset?: () => void;
+    // [T-History] Comparison Props
+    isCompareMode?: boolean;
+    onCompareModeChange?: (val: boolean) => void;
+    selectedYears?: string[];
+    onYearChange?: (year: string) => void;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -34,8 +39,26 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     selectedPdNumber,
     onPdNumberChange,
     employeeOptions,
-    onReset
+    onReset,
+    isCompareMode = false,
+    onCompareModeChange,
+    selectedYears = [],
+    onYearChange
 }) => {
+    // [T-History] Local state for dropdown visibility
+    const [isYearDropdownOpen, setIsYearDropdownOpen] = React.useState(false);
+    const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+    // Close dropdown on click outside
+    React.useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsYearDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Transform options for SearchableSelect
     const sectionOptions = useMemo(() => [
@@ -112,6 +135,54 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
                 {/* Counter Badge & Reset Button */}
                 <div className="flex-shrink-0 flex flex-col sm:flex-row items-end sm:items-center gap-3 xl:mb-1">
+
+                    {/* [T-History] Comparison UI */}
+                    {onCompareModeChange && (
+                        <div className="flex items-center gap-2 mr-2 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 h-[42px]">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={isCompareMode}
+                                    onChange={e => onCompareModeChange(e.target.checked)}
+                                    className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                                />
+                                <span className="text-sm font-bold text-orange-700 whitespace-nowrap">เปรียบเทียบปี</span>
+                            </label>
+
+                            {isCompareMode && onYearChange && (
+                                <div className="relative ml-2" ref={dropdownRef}>
+                                    <button
+                                        onClick={() => setIsYearDropdownOpen(!isYearDropdownOpen)}
+                                        className="flex items-center gap-2 cursor-pointer bg-white border border-gray-200 rounded-md px-3 py-1 text-sm text-gray-700 hover:bg-gray-50 transition shadow-sm outline-none active:scale-95 duration-100"
+                                    >
+                                        <span>เลือกปี ({selectedYears.length})</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${isYearDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+
+                                    {/* Dropdown Menu */}
+                                    {isYearDropdownOpen && (
+                                        <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-100">
+                                            <div className="text-xs font-semibold text-gray-400 mb-2 px-2">เลือกปีที่ต้องการเทียบ</div>
+                                            {['2024'].map(year => (
+                                                <label key={year} className="flex items-center gap-3 p-2 hover:bg-orange-50 rounded cursor-pointer transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedYears.includes(year)}
+                                                        onChange={() => onYearChange(year)}
+                                                        className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                                                    />
+                                                    <span className="text-sm text-gray-700 font-medium">{year}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {onReset && (
                         <button
                             onClick={onReset}
