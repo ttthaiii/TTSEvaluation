@@ -46,7 +46,7 @@ export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data, onSe
     // Use centralized colors
     const COLORS = GRADE_COLOR_MAP;
 
-    const gradeKeys = ['NI', 'BE', 'ME', 'OE', 'E'];
+    const gradeKeys = ['E', 'OE', 'ME', 'BE', 'NI'];
 
     const handleBarClick = (data: any) => {
         if (!drillDownPd) {
@@ -98,7 +98,22 @@ export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data, onSe
                         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                         <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                         <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '12px' }} />
+                        <Tooltip />
+                        <Legend content={(props) => {
+                            return (
+                                <ul className="flex flex-wrap justify-center gap-4 mt-2 text-xs">
+                                    {gradeKeys.map((key) => (
+                                        <li key={key} className="flex items-center gap-1.5">
+                                            <span
+                                                className="block w-2.5 h-2.5"
+                                                style={{ backgroundColor: COLORS[key] }}
+                                            />
+                                            <span className="text-slate-600">{key}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            );
+                        }} />
                         {gradeKeys.map(key => (
                             <Bar
                                 key={key}

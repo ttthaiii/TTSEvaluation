@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface PopupData {
     title: string;
@@ -21,6 +22,13 @@ export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
     onPopupScoreChange,
     onApplyScore
 }) => {
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
+
     const calculateAverage = () => {
         const values = Object.values(popupScores);
         if (values.length < data.subItems.length) return null;
@@ -30,9 +38,14 @@ export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
 
     const avg = calculateAverage();
 
-    return (
-        <div className="w-full lg:w-[480px] shrink-0 lg:sticky lg:top-[5.5rem] z-40">
-            <div className="bg-white rounded-2xl shadow-xl shadow-slate-200 border border-slate-100 flex flex-col max-h-[85vh] lg:max-h-[calc(100vh-6rem)] animate-in slide-in-from-right-10 fade-in duration-300 overflow-hidden">
+    if (!mounted) return null;
+
+    return createPortal(
+        <div className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-hidden">
+            {/* Click backdrop to close */}
+            <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
+
+            <div className="w-full max-w-lg bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200 relative z-10 flex flex-col max-h-[90vh] m-auto">
                 {/* Header */}
                 <div className="p-5 bg-white border-b border-gray-100 flex justify-between items-start shrink-0 z-10">
                     <div>
@@ -100,6 +113,7 @@ export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };

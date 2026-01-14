@@ -1,3 +1,6 @@
+import { GRADE_COLORS } from '@/constants/colors';
+import { UI_TEXT } from '@/constants/text';
+
 export interface GradeCriteria {
     id?: string; // Firestore ID
     grade: string;
@@ -12,21 +15,14 @@ export interface GradeCriteria {
 }
 
 export const GRADE_COLOR_MAP: Record<string, string> = {
-    'E': '#f97316',   // Orange-500
-    'OE': '#facc15',  // Yellow-400
-    'ME': '#fbbf24',  // Amber-400 (Peach-ish) -> OR '#fdba74' (Orange-300) -> Let's use Orange-400 #fb923c
-    'BE': '#6b7280',  // Gray-500 (Dark Grey)
-    'NI': '#ef4444',  // Red-500
-    'N/A': '#e5e7eb',  // Gray-200 (Light Grey)
-    'รอประเมิน': '#e5e7eb' // Fix for hardcoded Thai string in dashboard
+    'E': GRADE_COLORS.E.hex,
+    'OE': GRADE_COLORS.OE.hex,
+    'ME': GRADE_COLORS.ME.hex,
+    'BE': GRADE_COLORS.BE.hex,
+    'NI': GRADE_COLORS.NI.hex,
+    'N/A': GRADE_COLORS.NA.hex,
+    [UI_TEXT.WAITING]: GRADE_COLORS.WAITING.hex
 };
-
-// Tweaking to match user specific request precisely
-// E: Orange
-// OE: Yellow
-// ME: Peach/Light Orange
-// BE: Gray
-// N/A: Light Gray
 
 export const GRADE_RANGES: GradeCriteria[] = [
     {
@@ -35,9 +31,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานดีเลิศเกินความคาดหมาย',
         min: 86,
         max: 100,
-        colorClass: 'text-orange-600',
-        bgClass: 'bg-orange-50',
-        borderClass: 'border-orange-200',
+        colorClass: GRADE_COLORS.E.text,
+        bgClass: GRADE_COLORS.E.bg,
+        borderClass: GRADE_COLORS.E.border,
         icon: '👑'
     },
     {
@@ -46,9 +42,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานดีกว่ามาตรฐานที่กำหนด',
         min: 76,
         max: 85.99,
-        colorClass: 'text-yellow-500',
-        bgClass: 'bg-yellow-50',
-        borderClass: 'border-yellow-200',
+        colorClass: GRADE_COLORS.OE.text,
+        bgClass: GRADE_COLORS.OE.bg,
+        borderClass: GRADE_COLORS.OE.border,
         icon: '🌟'
     },
     {
@@ -57,9 +53,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานเป็นไปตามมาตรฐาน',
         min: 65,
         max: 75.99,
-        colorClass: 'text-orange-400',
-        bgClass: 'bg-orange-50',
-        borderClass: 'border-orange-200',
+        colorClass: GRADE_COLORS.ME.text,
+        bgClass: GRADE_COLORS.ME.bg,
+        borderClass: GRADE_COLORS.ME.border,
         icon: '👍'
     },
     {
@@ -68,9 +64,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานต่ำกว่ามาตรฐานในบางจุด',
         min: 50,
         max: 64.99,
-        colorClass: 'text-gray-500',
-        bgClass: 'bg-gray-100', // Darker bg for visibility
-        borderClass: 'border-gray-300',
+        colorClass: GRADE_COLORS.BE.text,
+        bgClass: GRADE_COLORS.BE.bg,
+        borderClass: GRADE_COLORS.BE.border,
         icon: '⚠️'
     },
     {
@@ -79,9 +75,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานต่ำกว่ามาตรฐานมาก ต้องเร่งปรับปรุง',
         min: 0,
         max: 49.99,
-        colorClass: 'text-rose-600',
-        bgClass: 'bg-rose-50',
-        borderClass: 'border-rose-200',
+        colorClass: GRADE_COLORS.NI.text,
+        bgClass: GRADE_COLORS.NI.bg,
+        borderClass: GRADE_COLORS.NI.border,
         icon: '🚨'
     }
 ];

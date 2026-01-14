@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 
 import Providers from "@/components/Providers";
 import Navbar from "@/components/Navbar";
+import MobileNavbar from "@/components/MobileNavbar";
 import { auth } from "@/auth";
 
 export default async function RootLayout({
@@ -34,6 +35,7 @@ export default async function RootLayout({
       >
         <Providers session={session}>
           <Navbar />
+          <MobileNavbar />
 
           {/* Spacer for Fixed Navbar */}
           <div className="h-16"></div>

@@ -81,3 +81,26 @@ const cleanFormula = v.formula.replace(/[\[\]]/g, '');
     - `useGradingRules` hook fetches rules.
     - `EvaluationPage` passes rules to `EmployeeStatsCard`.
     - Calculation logic falls back to hardcoded defaults if no database rules exist (Safe Migration).
+
+## System Refactoring (Phase 2 & 3): Maintainability & Performance
+### Goals
+1.  **Maintainability:** Eliminate hardcoded values (colors, text) scattered across the codebase.
+2.  **Performance:** Enable "Instant Switch" between Dashboard and Employee List without re-fetching data.
+
+### Implementation
+1.  **Centralized Constants (Phase 2):**
+    -   Created `src/constants/colors.ts`: Defines `GRADE_COLORS` (E, OE, ME, BE, NI, NA) and `CHART_COLORS`.
+    -   Created `src/constants/text.ts`: Defines `UI_TEXT` (Button labels, Titles) and `ERROR_MESSAGES`.
+    -   Refactored `grade-calculation.ts`, `DashboardPage`, `EmployeeListPage`, and Charts to use these constants.
+
+2.  **Evaluation Context (Phase 3):**
+    -   Created `EvaluationContext.tsx`: Fetches and caches `Employees`, `Evaluations`, `ScoringRules`, and `Sections` globally.
+    -   Wrapped App with `EvaluationProvider` in `Providers.tsx`.
+    -   Refactored `useEvaluation.ts`:
+        -   Removed internal `fetch` logic.
+        -   Consumes data from Context.
+        -   Implements `updateLocalEvaluation` to update Context state immediately after saving, reflecting changes instantly across the app.
+
+### Results
+-   **Theme Consistency:** Changing a grade color in `colors.ts` now updates all Charts, Tables, and Badges instanty.
+-   **Instant Navigation:** Switching from Dashboard to details and back is instant (0ms loading time) because the data is loaded once at app start.

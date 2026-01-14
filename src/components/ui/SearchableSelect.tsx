@@ -67,18 +67,21 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
     // Filter options
     const filteredOptions = useMemo(() => {
-        const query = searchQuery.toLowerCase().trim();
+        const query = (searchQuery || "").toLowerCase().trim();
 
         // [Fix] If query is empty OR query exactly matches the current selection's label, show ALL options.
         // This prevents filtering when the user just clicks to open the dropdown.
         if (!query) return options;
         if (selectedOption && searchQuery === selectedOption.label) return options;
 
-        return options.filter(opt => {
-            const labelMatch = opt.label.toLowerCase().includes(query);
+        const results = options.filter(opt => {
+            const labelMatch = (opt.label || "").toLowerCase().includes(query);
             const searchTermsMatch = opt.searchTerms ? opt.searchTerms.toLowerCase().includes(query) : false;
             return labelMatch || searchTermsMatch;
         });
+
+        console.log(`[SearchableSelect] Query: "${query}", Total Options: ${options.length}, Results: ${results.length}`, results);
+        return results;
     }, [options, searchQuery, selectedOption]);
 
     const handleSelect = (optionValue: string) => {
@@ -153,12 +156,12 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
                 {/* Dropdown Menu */}
                 {isOpen && (
-                    <div className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden animate-in fade-in zoom-in-95 duration-100">
+                    <div className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden">
                         {filteredOptions.length > 0 ? (
                             <div className="py-2">
-                                {filteredOptions.map((option) => (
+                                {filteredOptions.map((option, index) => (
                                     <div
-                                        key={option.value}
+                                        key={`${option.value}-${index}`}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             handleSelect(option.value);
@@ -170,7 +173,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                                     >
                                         <div className="flex flex-col overflow-hidden">
                                             <span className={`truncate font-medium ${option.statusColor || ''}`}>
-                                                {option.label}
+                                                {option.label || `(No Label) - ${option.value}`}
                                             </span>
                                             {option.description && (
                                                 <span className="text-xs text-slate-400 truncate">

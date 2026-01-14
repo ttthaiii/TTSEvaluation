@@ -119,7 +119,7 @@ export default function EvaluationPage() {
           )}
         </div>
 
-        {/* ================= RIGHT COLUMN (Popup) ================= */}
+        {/* ================= MODAL LAYER (Popup) ================= */}
         {popupData && (
           <ScoreHelperPopup
             data={popupData}
@@ -129,7 +129,6 @@ export default function EvaluationPage() {
             onApplyScore={applyPopupScore}
           />
         )}
-
       </div>
     </div>
   );

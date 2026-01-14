@@ -51,37 +51,37 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({
 
                                 <button
                                     onClick={() => onOpenPopup(item)}
-                                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all flex items-center gap-2 shrink-0
-                    ${isActive
-                                            ? 'bg-orange-100 border-orange-200 text-orange-700'
-                                            : 'bg-white border-slate-200 text-slate-600 hover:border-orange-300 hover:text-orange-600'
+                                    className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl border text-xs sm:text-sm font-bold transition-all flex items-center gap-2 shrink-0 h-fit
+                                        ${isActive
+                                            ? 'bg-orange-500 border-orange-600 text-white shadow-md'
+                                            : 'bg-white border-slate-200 text-slate-600 hover:border-orange-400 hover:text-orange-600 shadow-sm'
                                         }`}
                                 >
-                                    <span>{isActive ? '⚡' : '🧮'}</span> {isActive ? 'กำลังคำนวณ...' : 'ตัวช่วย'}
+                                    <span>{isActive ? '☇' : '🧮'}</span> {isActive ? 'คำนวณอยู่' : 'ตัวช่วย'}
                                 </button>
                             </div>
 
-                            <div className="flex flex-col items-center mt-6 pl-12">
+                            <div className="flex flex-col items-center mt-6">
                                 {/* 🔥 CHECK: Only Render 1-5 buttons if NOT Read Only */}
                                 {!item.isReadOnly ? (
-                                    <div className="flex flex-wrap justify-start gap-3 w-full">
+                                    <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-4 w-full">
                                         {[1, 2, 3, 4, 5].map((score) => (
                                             <button
                                                 key={score}
                                                 onClick={() => onScoreChange(item.id, score)}
                                                 className={`
-                            w-12 h-12 rounded-full font-bold text-lg transition-all duration-200 flex items-center justify-center
-                            ${currentScore === score
+                                                    w-10 h-10 sm:w-12 sm:h-12 rounded-full font-bold text-base sm:text-lg transition-all duration-200 flex items-center justify-center
+                                                    ${currentScore === score
                                                         ? 'bg-orange-500 text-white shadow-lg shadow-orange-200 scale-110 ring-4 ring-orange-100'
                                                         : 'bg-white border-2 border-slate-100 text-slate-400 hover:border-orange-400 hover:text-orange-500'
                                                     }
-                          `}
+                                                `}
                                             >
                                                 {score}
                                             </button>
                                         ))}
-                                        <div className="ml-auto text-sm flex items-center gap-2 text-slate-400">
-                                            {hasScore ? <span className="text-green-600 font-medium animate-in fade-in">บันทึกแล้ว ✓</span> : <span>ยังไม่ระบุคะแนน</span>}
+                                        <div className="text-[10px] sm:text-xs font-medium text-slate-400 min-w-[70px] text-center">
+                                            {hasScore ? <span className="text-green-600 animate-in fade-in">บันทึกแล้ว ✓</span> : <span>ยังไม่ระบุ</span>}
                                         </div>
                                     </div>
                                 ) : (

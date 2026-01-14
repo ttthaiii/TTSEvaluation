@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { X, TrendingUp, History, Loader2 } from 'lucide-react';
@@ -10,10 +11,8 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    BarChart,
-    Bar,
-    Cell
 } from 'recharts';
+import { getGrade, GRADE_COLOR_MAP } from '@/utils/grade-calculation';
 
 interface EvaluationHistoryModalProps {
     employeeId: string;
@@ -31,19 +30,16 @@ interface HistoryRecord {
 export const EvaluationHistoryModal: React.FC<EvaluationHistoryModalProps> = ({ employeeId, employeeName, onClose }) => {
     const [history, setHistory] = useState<HistoryRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
 
     useEffect(() => {
         const fetchHistory = async () => {
             try {
-                // Fetch evaluations for this employee
-                // Note: We use 'employeeDocId' as the key based on previous context, 
-                // or 'employeeId' if that's how it's stored. The current system seems to use 'employeeDocId' for the link.
-                // Let's assume passed 'employeeId' is the Doc ID or the String ID? 
-                // In EmployeeInfoCard, employee.employeeId is the "CODE" (e.g. EMP-001) and employee.id is Key.
-                // The evaluations are stored with 'employeeDocId' matching user.id
-
-                // Let's rely on the passed employeeId being the Doc ID (because EmployeeInfoCard has employee.id).
-
                 const q = query(
                     collection(db, 'evaluations'),
                     where('employeeDocId', '==', employeeId)
@@ -54,13 +50,20 @@ export const EvaluationHistoryModal: React.FC<EvaluationHistoryModalProps> = ({ 
 
                 snapshot.forEach(doc => {
                     const d = doc.data();
-                    // Determine Score: totalScore > disciplineScore ? logic?
-                    // Usually totalScore holds the final.
                     if (d.totalScore || d.finalGrade) {
+                        const score = Number(d.totalScore || 0);
+                        let grade = d.finalGrade;
+
+                        // 🔥 Calculate Grade if missing
+                        if (!grade || grade === '-') {
+                            const calculated = getGrade(score);
+                            grade = calculated ? calculated.grade : '-';
+                        }
+
                         data.push({
                             year: d.evaluationYear || 0,
-                            score: Number(d.totalScore || 0),
-                            grade: d.finalGrade || "-",
+                            score: score,
+                            grade: grade,
                             evaluator: d.evaluatorName || "-"
                         });
                     }
@@ -76,24 +79,22 @@ export const EvaluationHistoryModal: React.FC<EvaluationHistoryModalProps> = ({ 
             }
         };
 
-        fetchHistory();
+        if (employeeId) {
+            fetchHistory();
+        }
     }, [employeeId]);
 
-    // Determine Chart Color based on Grade (Mock logic or reusable)
-    const getGradeColor = (grade: string) => {
-        if (grade === 'A') return '#22c55e'; // Green
-        if (grade === 'B') return '#3b82f6'; // Blue
-        if (grade === 'C') return '#eab308'; // Yellow
-        if (grade === 'D') return '#f97316'; // Orange
-        return '#ef4444'; // Red
-    };
+    if (!mounted) return null;
 
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    return createPortal(
+        <div className="fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-hidden">
+            {/* Backdrop Click to Close */}
+            <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
+
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300 relative z-10 m-auto">
 
                 {/* Header */}
-                <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50/50">
+                <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50/50 shrink-0">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                             <History className="w-5 h-5 text-orange-600" />
@@ -179,9 +180,9 @@ export const EvaluationHistoryModal: React.FC<EvaluationHistoryModalProps> = ({ 
                                                     <td className="px-4 py-3 text-center">
                                                         <span
                                                             className="inline-block px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm"
-                                                            style={{ backgroundColor: getGradeColor(rec.grade) }}
+                                                            style={{ backgroundColor: GRADE_COLOR_MAP[rec.grade] || '#9ca3af' }}
                                                         >
-                                                            {rec.grade}
+                                                            {rec.grade || '-'}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-medium text-gray-900">
@@ -196,9 +197,8 @@ export const EvaluationHistoryModal: React.FC<EvaluationHistoryModalProps> = ({ 
                         </div>
                     )}
                 </div>
-
-
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };

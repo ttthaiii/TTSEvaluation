@@ -20,15 +20,21 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
     const [employeeRole, setEmployeeRole] = useState<string>('User'); // Default to User
 
     // Stats Data
-    const [stats, setStats] = useState({
+    const [stats, setStats] = useState<{
+        totalLateMinutes: number | string;
+        totalSickLeaveDays: number | string;
+        totalAbsentDays: number | string;
+        warningCount: number | string;
+        aiScore: number | string;
+    }>({
         totalLateMinutes: 0,
         totalSickLeaveDays: 0,
         totalAbsentDays: 0,
         warningCount: 0,
-        aiScore: 0 // New AI Score
+        aiScore: 0
     });
 
-    const [dynamicScores, setDynamicScores] = useState<Record<string, number>>({});
+    const [dynamicScores, setDynamicScores] = useState<Record<string, number | string>>({});
     const [questionMap, setQuestionMap] = useState<Record<string, string>>({}); // Map ID -> Title
 
     // Security Data
@@ -125,27 +131,69 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
         }
     };
 
+    // Generic Input Handlers with Float Support
+    const handleStatChange = (key: keyof typeof stats, value: string) => {
+        // Allow empty string or regex for partial number inputs if needed
+        setStats(prev => ({ ...prev, [key]: value }));
+    };
+
+    const handleStatBlur = (key: keyof typeof stats) => {
+        setStats(prev => {
+            const val = prev[key];
+            const num = parseFloat(String(val));
+            return {
+                ...prev,
+                [key]: isNaN(num) ? 0 : num
+            };
+        });
+    };
+
     const handleDynamicScoreChange = (key: string, value: string) => {
         setDynamicScores(prev => ({
             ...prev,
-            [key]: Number(value)
+            [key]: value
         }));
+    };
+
+    const handleDynamicScoreBlur = (key: string) => {
+        setDynamicScores(prev => {
+            const val = prev[key];
+            const num = parseFloat(String(val));
+            return {
+                ...prev,
+                [key]: isNaN(num) ? 0 : num
+            };
+        });
     };
 
     const handleSaveStats = async () => {
         setLoading(true);
         try {
+            // Sanitize Data before Saving (Ensure numbers)
+            const sanitizedStats = {
+                totalLateMinutes: Number(stats.totalLateMinutes) || 0,
+                totalSickLeaveDays: Number(stats.totalSickLeaveDays) || 0,
+                totalAbsentDays: Number(stats.totalAbsentDays) || 0,
+                warningCount: Number(stats.warningCount) || 0,
+                aiScore: Number(stats.aiScore) || 0,
+            };
+
+            const sanitizedDynamic: Record<string, number> = {};
+            Object.keys(dynamicScores).forEach(k => {
+                sanitizedDynamic[k] = Number(dynamicScores[k]) || 0;
+            });
+
             // 1. Update Subcollection
             const statsRef = doc(db, 'users', employeeId, 'yearlyStats', String(currentYear));
             // Check existence to decide set(merge) vs update? set with merge is safest
             await import('firebase/firestore').then(mod => {
-                mod.setDoc(statsRef, { ...stats, ...dynamicScores, year: currentYear }, { merge: true });
+                mod.setDoc(statsRef, { ...sanitizedStats, ...sanitizedDynamic, year: currentYear }, { merge: true });
             });
 
             // 2. Update Main Doc (Always update main doc to reflect the current evaluation/stats in the list)
             // Note: We might NOT want to spam main doc with all dynamic scores, but standard stats yes.
             const mainRef = doc(db, 'users', employeeId);
-            await updateDoc(mainRef, stats);
+            await updateDoc(mainRef, sanitizedStats);
 
             await showAlert("สำเร็จ", "✅ บันทึกข้อมูลสถิติเรียบร้อย");
             onSaveSuccess();
@@ -239,7 +287,9 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                             <input
                                                 type="number"
                                                 value={stats.totalLateMinutes}
-                                                onChange={e => setStats({ ...stats, totalLateMinutes: Number(e.target.value) })}
+                                                onChange={e => handleStatChange('totalLateMinutes', e.target.value)}
+                                                onBlur={() => handleStatBlur('totalLateMinutes')}
+                                                onFocus={e => e.target.select()}
                                                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                             />
                                         </div>
@@ -248,7 +298,9 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                             <input
                                                 type="number"
                                                 value={stats.warningCount}
-                                                onChange={e => setStats({ ...stats, warningCount: Number(e.target.value) })}
+                                                onChange={e => handleStatChange('warningCount', e.target.value)}
+                                                onBlur={() => handleStatBlur('warningCount')}
+                                                onFocus={e => e.target.select()}
                                                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                             />
                                         </div>
@@ -257,7 +309,9 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                             <input
                                                 type="number" step="0.5"
                                                 value={stats.totalSickLeaveDays}
-                                                onChange={e => setStats({ ...stats, totalSickLeaveDays: Number(e.target.value) })}
+                                                onChange={e => handleStatChange('totalSickLeaveDays', e.target.value)}
+                                                onBlur={() => handleStatBlur('totalSickLeaveDays')}
+                                                onFocus={e => e.target.select()}
                                                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                             />
                                         </div>
@@ -266,7 +320,9 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                             <input
                                                 type="number" step="0.5"
                                                 value={stats.totalAbsentDays}
-                                                onChange={e => setStats({ ...stats, totalAbsentDays: Number(e.target.value) })}
+                                                onChange={e => handleStatChange('totalAbsentDays', e.target.value)}
+                                                onBlur={() => handleStatBlur('totalAbsentDays')}
+                                                onFocus={e => e.target.select()}
                                                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                             />
                                         </div>
@@ -304,6 +360,8 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                                                 type="number" step="0.1"
                                                                 value={val}
                                                                 onChange={e => handleDynamicScoreChange(key, e.target.value)}
+                                                                onBlur={() => handleDynamicScoreBlur(key)}
+                                                                onFocus={e => e.target.select()}
                                                                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-gray-50"
                                                             />
                                                         </div>
@@ -311,13 +369,15 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                                 })}
 
                                                 {/* If stats.aiScore exists and isn't covered in dynamicScores (it shouldn't be), consider showing it if > 0 */}
-                                                {stats.aiScore > 0 && !dynamicScores['aiScore'] && (
+                                                {Number(stats.aiScore) > 0 && !dynamicScores['aiScore'] && (
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-1">AI Score (Manual)</label>
                                                         <input
                                                             type="number" step="0.1"
                                                             value={stats.aiScore}
-                                                            onChange={e => setStats({ ...stats, aiScore: Number(e.target.value) })}
+                                                            onChange={e => handleStatChange('aiScore', e.target.value)}
+                                                            onBlur={() => handleStatBlur('aiScore')}
+                                                            onFocus={e => e.target.select()}
                                                             className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-orange-50/30"
                                                         />
                                                     </div>

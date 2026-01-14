@@ -153,24 +153,15 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
                             <div className="h-10"></div> {/* Spacer */}
                         </div>
 
-                        {/* Helper Popup (Overlay inside Drawer) */}
+                        {/* Helper Popup (Self-Portaled) */}
                         {popupData && (
-                            <div className="absolute inset-0 z-[60] bg-black/50 flex justify-end">
-                                <div
-                                    className="w-full max-w-md h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <div className="h-full overflow-y-auto">
-                                        <ScoreHelperPopup
-                                            data={popupData}
-                                            popupScores={popupScores}
-                                            onClose={closePopup}
-                                            onPopupScoreChange={handlePopupScore}
-                                            onApplyScore={applyPopupScore}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                            <ScoreHelperPopup
+                                data={popupData}
+                                popupScores={popupScores}
+                                onClose={closePopup}
+                                onPopupScoreChange={handlePopupScore}
+                                onApplyScore={applyPopupScore}
+                            />
                         )}
                     </div>
                 </>,

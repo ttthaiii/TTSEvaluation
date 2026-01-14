@@ -10,11 +10,15 @@ import { CompetencyRadarChart } from '../../components/dashboard/CompetencyRadar
 import { EmployeeTable } from '../../components/dashboard/EmployeeTable';
 import { getGrade, GRADE_RANGES, GradeCriteria } from '@/utils/grade-calculation';
 import { Loader2 } from 'lucide-react';
-import { EvaluationDrawer } from '../../components/evaluations/EvaluationDrawer'; // 🔥 Import Drawer
 import { Employee } from '@/types/employee';
 import { EvaluationRecord } from '@/types/evaluation';
 import { collection, query, where, getDocs } from 'firebase/firestore'; // 🔥 Import Firestore
 import { db } from '@/lib/firebase'; // 🔥 Import DB instance
+import { UI_TEXT } from '@/constants/text';
+import { useEmployeeFilter } from '@/hooks/useEmployeeFilter'; // [Refactor]
+import { useHistoricalData } from '@/hooks/useHistoricalData'; // [Refactor]
+import { GRADE_COLORS } from '@/constants/colors';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
     const {
@@ -25,67 +29,18 @@ export default function DashboardPage() {
         loading,
         categories,
         evalYear,
-        refreshData, // 🔥 Pull refresh function
-        updateLocalEvaluation // 🔥 Pull local update function
+        refreshData,
+        updateLocalEvaluation
     } = useEvaluation();
 
-    const [selectedSection, setSelectedSection] = useState<string>('All');
-    const [selectedGrade, setSelectedGrade] = useState<string>('All');
-    const [selectedPdNumber, setSelectedPdNumber] = useState<string>('All'); // [T-030]
-    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
-    const [evaluationPanelId, setEvaluationPanelId] = useState<string | null>(null); // 🔥 Drawer State
+    const router = useRouter();
 
     // [T-History] Comparison State
     const [isCompareMode, setIsCompareMode] = useState(false);
     const [selectedYears, setSelectedYears] = useState<string[]>(['2024']);
-    const [historicalData, setHistoricalData] = useState<Map<string, Map<number, { score: number, grade: string }>>>(new Map());
 
-    // [T-History] Fetch History
-    React.useEffect(() => {
-        if (!isCompareMode || selectedYears.length === 0) {
-            setHistoricalData(new Map());
-            return;
-        }
-
-        const fetchHistory = async () => {
-            try {
-                const numericYears = selectedYears.map(y => parseInt(y));
-                const q = query(
-                    collection(db, 'evaluations'),
-                    where('evaluationYear', 'in', numericYears)
-                );
-
-                const snapshot = await getDocs(q);
-                const historyMap = new Map<string, Map<number, { score: number, grade: string }>>();
-
-                snapshot.docs.forEach(doc => {
-                    const data = doc.data();
-                    // Supports both 'employeeId' (legacy/string ID) or 'employeeDocId' (auth ID).
-                    // Employee List used 'employeeDocId'. Use 'employeeDocId' if available for consistency with generic ID.
-                    // But our emp objects here have 'id' (docId) and 'employeeId' (code).
-                    // Let's key by 'docId' (item.id in dashboardData).
-                    const docId = data.employeeDocId;
-
-                    if (docId) {
-                        if (!historyMap.has(docId)) {
-                            historyMap.set(docId, new Map());
-                        }
-                        historyMap.get(docId)?.set(data.evaluationYear, {
-                            score: data.totalScore || 0,
-                            grade: data.finalGrade || "-"
-                        });
-                    }
-                });
-
-                setHistoricalData(historyMap);
-
-            } catch (error) {
-                console.error("Error fetching history:", error);
-            }
-        };
-
-        fetchHistory();
-    }, [isCompareMode, selectedYears]);
+    // 🔥 Use Historical Data Hook
+    const { historicalData } = useHistoricalData(isCompareMode, selectedYears);
 
     // 2. Prepare Data for Dashboard (Map ALL employees)
     const dashboardData = useMemo(() => {
@@ -103,15 +58,15 @@ export default function DashboardPage() {
 
             let totalScore = 0;
             let grade = {
-                grade: 'รอประเมิน',
+                grade: UI_TEXT.WAITING,
                 range: '-',
-                description: 'ยังไม่ได้รับการประเมิน',
-                colorClass: 'text-slate-400',
-                bgClass: 'bg-slate-100',
+                description: UI_TEXT.WAITING_DESC,
+                colorClass: GRADE_COLORS.NA.text,
+                bgClass: GRADE_COLORS.NA.bg,
                 label: 'Waiting',
                 min: 0,
                 max: 0,
-                borderClass: 'border-slate-200',
+                borderClass: GRADE_COLORS.NA.border,
                 icon: '⏳'
             } as any;
 
@@ -130,114 +85,57 @@ export default function DashboardPage() {
         });
     }, [employees, existingEvaluations, historicalData]);
 
-    // [T-030] Extract Unique PdNumbers
-    const uniquePdNumbers = useMemo(() => {
-        const pds = new Set<string>();
-        dashboardData.forEach(e => {
-            if (e.pdNumber) pds.add(e.pdNumber);
-        });
-        return Array.from(pds).sort();
-    }, [dashboardData]);
+    // [T-030] Extract Unique PdNumbers (Still useful?)
+    // Actually hook calculates availablePdNumbers, but maybe we want ALL possible ones here?
+    // Let's let the hook handle it. But wait, 'uniquePdNumbers' was used for... nothing? 
+    // It was used in previous code but logic removed? Ah, no, it was used to pass to FilterBar?
+    // FilterBar now takes availablePdNumbers from hook.
 
-    // [T-030] Autocomplete Options
-    const employeeOptions = useMemo(() => {
-        return dashboardData.map(e => ({
-            id: e.id,
-            name: `${e.employeeId} ${e.firstName} ${e.lastName}`
-        }));
-    }, [dashboardData]);
+    // [T-030] Autocomplete Options (Legacy logic? Hook provides availableEmployeeOptions)
 
-    // 3. Cascading Filter Logic
-    // Helper to filter data based on specific criteria
-    const filterSubset = (
-        data: typeof dashboardData,
-        criteria: { section?: string; grade?: string; pd?: string; search?: string }
-    ) => {
-        return data.filter(item => {
-            const matchSection = !criteria.section || criteria.section === 'All' || item.section === criteria.section;
-            const matchGrade = !criteria.grade || criteria.grade === 'All' || item.grade?.grade === criteria.grade;
-            const matchPd = !criteria.pd || criteria.pd === 'All' || item.pdNumber === criteria.pd;
+    // 🔥 Initialize Filter Hook (Generic Type Hack for Dashboard Data)
+    const {
+        filters,
+        setFilter,
+        resetFilters,
+        filteredEmployees: filteredEmployeesRaw, // Alias and Raw
+        availableSections,
+        availableGrades,
+        availablePdNumbers,
+        employeeOptionsResolved: availableEmployeeOptions
+    } = useEmployeeFilter(dashboardData as unknown as Employee[]);
 
-            // Search logic (optional inclusion in Cascade)
-            // Usually, Search shouldn't limit dropdown options (circular dependency if selecting from dropdown)
-            // But if we want Strict filtering, we can include it. 
-            // For now, let's keep Dropdowns independent of Search Text, but Search Text dependent on Dropdowns.
-            return matchSection && matchGrade && matchPd;
-        });
-    };
+    // Cast back to Dashboard Item Type
+    const filteredData = filteredEmployeesRaw as unknown as typeof dashboardData;
 
-    // Derived Options based on INTERSECTION of other filters
-    const availableSections = useMemo(() => {
-        // Options for Section should respect Grade & PdNumber
-        const subset = filterSubset(dashboardData, { grade: selectedGrade, pd: selectedPdNumber });
-        return Array.from(new Set(subset.map(i => i.section))).sort();
-    }, [dashboardData, selectedGrade, selectedPdNumber]);
-
-    const availableGrades = useMemo(() => {
-        // Options for Grade should respect Section & PdNumber
-        const subset = filterSubset(dashboardData, { section: selectedSection, pd: selectedPdNumber });
-        const grades = new Set<string>();
-        subset.forEach(i => {
-            if (i.grade?.grade) grades.add(i.grade.grade);
-        });
-
-        // Return full GradeCriteria objects that match the available grades
-        return GRADE_RANGES.filter(g => grades.has(g.grade));
-    }, [dashboardData, selectedSection, selectedPdNumber]);
-
-    const availablePdNumbers = useMemo(() => {
-        // Options for PdNumber should respect Section & Grade
-        const subset = filterSubset(dashboardData, { section: selectedSection, grade: selectedGrade });
-        return Array.from(new Set(subset.map(i => i.pdNumber).filter((p): p is string => !!p))).sort();
-    }, [dashboardData, selectedSection, selectedGrade]);
-
-    // Available Employees (for Autocomplete) - Respects ALL current filters (Section, Grade, Pd)
-    const availableEmployeeOptions = useMemo(() => {
-        const subset = filterSubset(dashboardData, {
-            section: selectedSection,
-            grade: selectedGrade,
-            pd: selectedPdNumber
-        });
-        return subset.map(e => ({
-            id: e.employeeId, // Use Text ID for value to match existing logic logic (or change keys)
-            name: `${e.employeeId} - ${e.firstName} ${e.lastName}`,
-            searchTerms: `${e.employeeId} ${e.firstName} ${e.lastName}`
-        }));
-    }, [dashboardData, selectedSection, selectedGrade, selectedPdNumber]);
-
-    // 4. Final Filtered Data (Display Data)
-    const filteredData = useMemo(() => {
-        // Base subset from dropdowns
-        const subset = filterSubset(dashboardData, {
-            section: selectedSection,
-            grade: selectedGrade,
-            pd: selectedPdNumber
-        });
-
-        // Apply Text Search on top
-        if (!selectedEmployeeId) return subset;
-
-        const searchLower = selectedEmployeeId.toLowerCase().trim();
-        return subset.filter(item => {
-            const fullNameString = `${item.employeeId} ${item.firstName} ${item.lastName}`.toLowerCase();
-            return item.employeeId.toLowerCase().includes(searchLower) ||
-                item.firstName.toLowerCase().includes(searchLower) ||
-                item.lastName.toLowerCase().includes(searchLower) ||
-                fullNameString.includes(searchLower);
-        });
-    }, [dashboardData, selectedSection, selectedGrade, selectedPdNumber, selectedEmployeeId]);
-
+    // Helper Wrappers for UI Handlers
     const handleGradeClick = (grade: string) => {
-        setSelectedGrade(prev => prev === grade ? 'All' : grade);
+        setFilter('grade', filters.grade === grade ? 'All' : grade);
     };
 
     const handleSectionClick = (section: string) => {
-        setSelectedSection(prev => prev === section ? 'All' : section);
+        setFilter('section', filters.section === section ? 'All' : section);
     };
 
     const handleRowClick = (empId: string) => {
-        setSelectedEmployeeId(prev => prev === empId ? '' : empId);
+        // Here selectedEmployeeId is used for "Selection" (Highlight), NOT filtering.
+        // Wait, line 238 in original: values 'selectedEmployeeId' was used for filter text AND selection highlight?
+        // Line 220 `searchLower = selectedEmployeeId`.
+        // Line 239 `setSelectedEmployeeId(prev => ...`.
+        // So clicking a row filtered the list to ONLY that employee? That seems odd UX.
+        // Usually Row Click -> Draw/Details.
+        // Let's look at logic: `handleEvaluate` opens drawer. `handleRowClick` was doing selection/filter.
+        // If I Click a row, it sets selectedEmployeeId -> filteredData becomes 1 item.
+        // If that's the desired legacy behavior, we map it to `filters.info`.
+
+        // But `filters.info` is "Search Text". 
+        // If I click row, and set filter.info = empId, it works.
+        // But if I click again to deselect?
+        const currentSearch = filters.info;
+        setFilter('info', currentSearch === empId ? '' : empId);
     };
+
+    // Removed Handlers (Defined above with hook)
 
     // [T-History] Compute Comparison Distribution (Top-Level Hook)
     const comparisonDistribution = useMemo(() => {
@@ -277,12 +175,7 @@ export default function DashboardPage() {
         );
     }
 
-    const handleResetFilters = () => {
-        setSelectedSection('All');
-        setSelectedGrade('All');
-        setSelectedPdNumber('All');
-        setSelectedEmployeeId('');
-    };
+    // handleResetFilters moved to hook alias 'resetFilters'
 
     if (loading) {
         return (
@@ -293,36 +186,36 @@ export default function DashboardPage() {
     }
 
     const handleEvaluate = (id: string) => {
-        setEvaluationPanelId(id);
+        router.push(`/evaluations/${id}?returnTo=/dashboard`);
     };
 
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden">
-            {/* Left Side: Dashboard Content */}
+            {/* Left Side: Dashboard Content - Full Width */}
             <div className={`flex-1 flex flex-col h-full transition-all duration-300 overflow-hidden`}>
-                <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth pb-20 md:pb-6"> {/* Padding for mobile nav */}
                     {/* Header */}
                     <div className="mb-6 rounded-lg bg-gradient-to-r from-orange-400 to-orange-600 p-6 text-white shadow-lg">
-                        <h1 className="text-3xl font-bold">ภาพรวมผลการประเมินพนักงาน</h1>
-                        <p className="text-orange-100">ประจำปี {evalYear}</p>
+                        <h1 className="text-2xl md:text-3xl font-bold">{UI_TEXT.DASHBOARD_TITLE}</h1>
+                        <p className="text-orange-100">{UI_TEXT.EVAL_YEAR_LABEL} {evalYear}</p>
                     </div>
 
                     {/* Filters */}
                     <FilterBar
                         sections={availableSections}
                         grades={availableGrades}
-                        selectedSection={selectedSection}
-                        onSectionChange={setSelectedSection}
-                        selectedGrade={selectedGrade}
-                        onGradeChange={setSelectedGrade}
-                        searchTerm={selectedEmployeeId}
-                        onSearchChange={setSelectedEmployeeId}
+                        selectedSection={filters.section}
+                        onSectionChange={(val) => setFilter('section', val)}
+                        selectedGrade={filters.grade}
+                        onGradeChange={(val) => setFilter('grade', val)}
+                        searchTerm={filters.info}
+                        onSearchChange={(val) => setFilter('info', val)}
                         totalCount={filteredData.length}
                         pdNumbers={availablePdNumbers}
-                        selectedPdNumber={selectedPdNumber}
-                        onPdNumberChange={setSelectedPdNumber}
-                        employeeOptions={availableEmployeeOptions}
-                        onReset={handleResetFilters}
+                        selectedPdNumber={filters.pdNumber}
+                        onPdNumberChange={(val) => setFilter('pdNumber', val)}
+                        employeeOptions={availableEmployeeOptions} // Type safe now
+                        onReset={resetFilters}
                         // [T-History] Props
                         isCompareMode={isCompareMode}
                         onCompareModeChange={setIsCompareMode}
@@ -348,7 +241,7 @@ export default function DashboardPage() {
                             <SectionStackChart
                                 data={filteredData}
                                 onSectionClick={handleSectionClick}
-                                onBack={() => setSelectedSection('All')}
+                                onBack={() => setFilter('section', 'All')}
                             />
                         </div>
 
@@ -387,24 +280,7 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {/* Right Side: Evaluation Drawer (Spacer & Container) */}
-            <div
-                className={`
-                    transition-all duration-300 transform 
-                    ${evaluationPanelId ? 'w-[600px] translate-x-0' : 'w-0 translate-x-full'}
-                `}
-            >
-                {evaluationPanelId && (
-                    <EvaluationDrawer
-                        employeeId={evaluationPanelId}
-                        onClose={() => setEvaluationPanelId(null)}
-                        onSuccess={(data) => {
-                            updateLocalEvaluation(data); // 🔥 Update Only ONE Record
-                            setEvaluationPanelId(null);
-                        }}
-                    />
-                )}
-            </div>
+            {/* Drawer Removed - Redirects to /evaluations/[id] */}
         </div>
     );
 }

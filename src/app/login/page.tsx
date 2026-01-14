@@ -46,19 +46,19 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
+        <div className="h-screen w-screen overflow-hidden flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 px-4 sm:px-6">
+            <div className="bg-white p-6 sm:p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 mb-4">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 mb-4 shadow-sm">
                         <Lock className="w-8 h-8 text-indigo-600" />
                     </div>
-                    <h1 className="text-2xl font-bold text-slate-900">เข้าสู่ระบบ</h1>
-                    <p className="text-slate-500 mt-2">ระบบประเมินผลการปฏิบัติงาน</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">เข้าสู่ระบบ</h1>
+                    <p className="text-slate-500 mt-2 text-sm sm:text-base">ระบบประเมินผลการปฏิบัติงาน</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {error && (
-                        <div className="p-4 rounded-lg bg-red-50 text-red-600 text-sm border border-red-100">
+                        <div className="p-4 rounded-lg bg-red-50 text-red-600 text-sm border border-red-100 animate-in fade-in slide-in-from-top-2">
                             {error}
                         </div>
                     )}
@@ -75,7 +75,7 @@ export default function LoginPage() {
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-colors"
+                                className="block w-full pl-10 pr-3 py-3 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-colors text-base"
                                 placeholder="กรอก Username"
                                 required
                             />
@@ -94,7 +94,7 @@ export default function LoginPage() {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-colors"
+                                className="block w-full pl-10 pr-3 py-3 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-colors text-base"
                                 placeholder="••••••••"
                                 required
                             />
@@ -104,7 +104,7 @@ export default function LoginPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                        className="w-full py-3.5 sm:py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-base"
                     >
                         {loading ? 'กำลังตรวจสอบ...' : 'เข้าสู่ระบบ'}
                     </button>

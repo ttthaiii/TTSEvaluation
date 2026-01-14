@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, Legend } from 'recharts';
 import { DashboardItem } from '@/types/dashboard';
+import { GRADE_COLORS, CHART_COLORS } from '@/constants/colors';
 
 interface GradeDistributionChartProps {
     data: DashboardItem[];
@@ -44,15 +45,15 @@ export const GradeDistributionChart: React.FC<GradeDistributionChartProps> = ({
     }, [data, isCompareMode, comparisonData]);
 
     const COLORS: Record<string, string> = {
-        'E': '#f97316',
-        'OE': '#fbbf24',
-        'ME': '#fcd34d',
-        'BE': '#d1d5db',
-        'NI': '#9ca3af'
+        'E': GRADE_COLORS.E.hex,
+        'OE': GRADE_COLORS.OE.hex,
+        'ME': GRADE_COLORS.ME.hex,
+        'BE': GRADE_COLORS.BE.hex,
+        'NI': GRADE_COLORS.NI.hex
     };
 
     // Helper for Legend/Tooltip Colors
-    const YEAR_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899']; // Blue, Violet, Pink for history
+    const YEAR_COLORS = [CHART_COLORS.primary, CHART_COLORS.quinary, CHART_COLORS.quaternary]; // Blue, Violet, Red/Pink for history
 
     return (
         <div className="h-[300px] w-full">

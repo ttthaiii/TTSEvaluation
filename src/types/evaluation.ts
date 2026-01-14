@@ -32,4 +32,5 @@ export interface EvaluationRecord {
     createdAt?: any; // Firestore Timestamp
     aiScore?: number; // AI Score
     status?: 'Draft' | 'Completed'; // สถานะการประเมิน: Draft (ร่าง) หรือ Completed (เสร็จสมบูรณ์)
+    finalGrade?: string; // เกรดสรุปผล
 }

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { DashboardItem } from '@/types/dashboard';
 import { HO_SECTIONS } from '../../data/evaluation-criteria';
+import { CHART_COLORS } from '@/constants/colors';
 
 interface CompetencyRadarChartProps {
     data: DashboardItem[];
@@ -95,8 +96,8 @@ export const CompetencyRadarChart: React.FC<CompetencyRadarChartProps> = ({ data
                     <Radar
                         name="คะแนนเฉลี่ย (%)"
                         dataKey="A"
-                        stroke="#8884d8"
-                        fill="#8884d8"
+                        stroke={CHART_COLORS.quinary}
+                        fill={CHART_COLORS.quinary}
                         fillOpacity={0.6}
                     />
                     <Tooltip />

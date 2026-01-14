@@ -11,6 +11,12 @@ import EmployeeEditModal from '@/components/admin/EmployeeEditModal';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { getGrade } from '../../utils/grade-calculation';
 import { useGradingRules } from '../../hooks/useGradingRules';
+import { useEmployeeFilter } from '@/hooks/useEmployeeFilter'; // [Refactor]
+import { useHistoricalData } from '@/hooks/useHistoricalData'; // [Refactor]
+import { GRADE_COLORS } from '@/constants/colors';
+import { UI_TEXT } from '@/constants/text';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 // --- Helper Functions ---
 const parseLateTime = (value: any): number => {
@@ -49,16 +55,57 @@ export default function EmployeeListPage() {
 
     // 🔥 Modal Hook
     const { showAlert, showConfirm } = useModal();
+    const router = useRouter();
+    const { data: session } = useSession();
+
+    // 🔥 Page Protection: Only Admin can access this page
+    useEffect(() => {
+        if (!loading && session?.user) {
+            if ((session.user as any).role !== 'Admin') {
+                router.replace('/dashboard');
+            }
+        }
+    }, [session, loading, router]);
 
 
     // 👇 State for Grading Rules (ใช้สำหรับคำนวณเกรดตอน Export)
     const { rules: gradingRules } = useGradingRules();
 
-    // 👇 State for Filtering & Search
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedSection, setSelectedSection] = useState('All');
+    // 👇 State for Filtering (Replacing simple states with Hook)
+    // const [searchTerm, setSearchTerm] = useState('');     <-- Moved to Hook
+    // const [selectedSection, setSelectedSection] = useState('All'); <-- Moved to Hook
     const [showEvaluatorsOnly, setShowEvaluatorsOnly] = useState(false);
-    const [sections, setSections] = useState<string[]>([]);
+    const [sections, setSections] = useState<string[]>([]); // Keep for initial loading or move to context?
+    // Actually filter hook derives sections from data, 
+    // BUT fetchEmployees sets this 'sections' state from DB.
+    // We can keep 'sections' state here as the "Source of Truth" for *All Possible Sections*
+    // or rely on hook. Hook derives from valid employees. 
+    // DB fetch sees all users. So safer to keep logic if we want to show sections even if no emp fits?
+    // Current logic: fetchEmployees calculates unique sections from DB users.
+    // Hook calculates available sections from *passed employees*.
+    // If 'employees' contains all users, then hook.availableSections == sections.
+    // So we can Remove 'sections' state if we trust hook.
+    // Let's keep 'sections' for now if it's used elsewhere, otherwise deprecate.
+    // 'sections' used in line 282 for options. Hook provides availableSections.
+
+    // 🔥 Initialize Filter Hook
+    const {
+        filters,
+        setFilter,
+        resetFilters,
+        filteredEmployees: hookFilteredEmployees,
+        availableSections,
+        employeeOptionsResolved: availableEmployeeOptions
+    } = useEmployeeFilter(employees);
+
+    // Filter Logic Extension: Show Evaluators Only (Local to this page)
+    const filteredEmployees = useMemo(() => {
+        let res = hookFilteredEmployees;
+        if (showEvaluatorsOnly) {
+            res = res.filter(e => e.isEvaluator);
+        }
+        return res;
+    }, [hookFilteredEmployees, showEvaluatorsOnly]);
 
     // 👇 State for Edit Modal
     const [editModalOpen, setEditModalOpen] = useState(false);
@@ -68,8 +115,9 @@ export default function EmployeeListPage() {
     // [Refactor] Support Multi-Year Comparison
     const [isCompareMode, setIsCompareMode] = useState(false);
     const [selectedHistoricals, setSelectedHistoricals] = useState<number[]>([2024]);
-    // Data Structure: EmpID -> Year -> { grade }
-    const [historicalData, setHistoricalData] = useState<Map<string, Map<number, { grade: string }>>>(new Map());
+
+    // 🔥 Use Historical Data Hook
+    const { historicalData } = useHistoricalData(isCompareMode, selectedHistoricals);
 
     // 🔥 Dropdown Logic (Click Outside)
     const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
@@ -132,46 +180,8 @@ export default function EmployeeListPage() {
         )
     }
 
-    // 🔥 Fetch Historical Data when Compare Mode is active & Years are selected
-    useEffect(() => {
-        if (!isCompareMode) {
-            setHistoricalData(new Map());
-            return;
-        }
-
-        const fetchHistory = async () => {
-            try {
-                // Modified: Now supports fetching multiple years (though loop logic for single state update is complex, simplifying)
-                // Let's iterate selectedHistoricals
-                const historyMap = new Map<string, Map<number, { grade: string }>>();
-
-                for (const year of selectedHistoricals) {
-                    const q = query(collection(db, 'evaluations'), where('evaluationYear', '==', year));
-                    const snapshot = await getDocs(q);
-
-                    snapshot.forEach(doc => {
-                        const data = doc.data();
-                        const empId = data.employeeDocId; // Using employeeDocId as key
-
-                        if (!historyMap.has(empId)) {
-                            historyMap.set(empId, new Map());
-                        }
-
-                        // Store only Grade for history
-                        historyMap.get(empId)?.set(year, {
-                            grade: data.finalGrade || "-"
-                        });
-                    });
-                }
-                setHistoricalData(historyMap);
-
-            } catch (error) {
-                console.error("Error fetching history:", error);
-            }
-        };
-
-        fetchHistory();
-    }, [isCompareMode, selectedHistoricals]);
+    // 🔥 Fetch Historical Data Logic is now in useHistoricalData hook!
+    // Removed duplicate useEffect.
 
     // --- Fetch Employees ---
     const fetchEmployees = async () => {
@@ -279,34 +289,17 @@ export default function EmployeeListPage() {
     // --- Options for SearchableSelect ---
     const sectionOptions = useMemo(() => [
         { value: 'All', label: 'ทุกสังกัด / แผนก' },
-        ...sections.map(s => ({ value: s, label: s }))
-    ], [sections]);
+        ...availableSections.map(s => ({ value: s, label: s }))
+    ], [availableSections]);
 
+    // Use availableEmployeeOptions from hook directly
     const employeeSelectOptions = useMemo(() => {
-        // Filter employees based on selected Section first
-        const availableEmployees = selectedSection === 'All'
-            ? employees
-            : employees.filter(emp => emp.section === selectedSection);
-
+        console.log("!!! REFRESHED EMPLOYEE OPTIONS !!!");
         return [
             { value: '', label: 'ทั้งหมด (All)' },
-            ...availableEmployees.map(emp => ({
-                value: emp.id,
-                label: `${emp.firstName} ${emp.lastName}`,
-                searchTerms: `${emp.employeeId} ${emp.firstName} ${emp.lastName}`,
-                description: `${emp.employeeId} - ${emp.position}`
-            }))
+            ...(availableEmployeeOptions || [])
         ];
-    }, [employees, selectedSection]);
-
-    // --- Filtering Logic ---
-    const filteredEmployees = employees.filter(emp => {
-        const matchesSearch = searchTerm ? emp.id === searchTerm : true;
-        const matchesSection = selectedSection === 'All' || emp.section === selectedSection;
-        const matchesEvaluator = showEvaluatorsOnly ? (emp as any).isEvaluator : true;
-
-        return matchesSearch && matchesSection && matchesEvaluator;
-    });
+    }, [availableEmployeeOptions]);
 
     // 🌟 Function to Export Excel (ฟังก์ชันส่งออก Excel)
     const handleExportExcel = async () => {
@@ -315,11 +308,36 @@ export default function EmployeeListPage() {
             return;
         }
 
+        const prevYear = Number(currentEvalYear) - 1;
+        const prevYearPeriod = `${prevYear}-Annual`; // Assuming pattern, verify dateUtils logic?
+        // Actually, let's fetch logic explicitly to be safe. 
+        // We know period format is usually `${year}-Annual`.
+
+        // Fetch Previous Year Data Map
+        const prevYearMap = new Map<string, { score: number, grade: string }>();
+        try {
+            const evalsQuery = query(collection(db, 'evaluations'), where('period', '==', prevYearPeriod));
+            const evalsSnapshot = await getDocs(evalsQuery);
+            evalsSnapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.employeeDocId) {
+                    prevYearMap.set(d.employeeDocId, {
+                        score: Number(d.totalScore || d.disciplineScore || 0),
+                        grade: d.finalGrade || "-"
+                    });
+                }
+            });
+        } catch (err) {
+            console.error("Error fetching prev year data for export:", err);
+            // Non-blocking error, just continue with empty prev year data
+        }
+
         // 1. Prepare Data Logic (เตรียมข้อมูลสำหรับ Export)
         const exportData = filteredEmployees.map((emp: any) => {
             const score = emp.evaluationScore;
             // คำนวณเกรดโดยใช้ rules ปัจจุบัน
             const gradeInfo = score !== null ? getGrade(score, gradingRules) : null;
+            const prevYearData = prevYearMap.get(emp.id);
 
             return {
                 "รหัสพนักงาน": emp.employeeId,
@@ -328,7 +346,11 @@ export default function EmployeeListPage() {
                 "แผนก (Department)": emp.department,
                 "ตำแหน่ง": emp.position,
                 [`คะแนนปี ${currentEvalYear}`]: score !== null ? Number(score).toFixed(2) : "รอประเมิน",
-                "เกรด (Grade)": gradeInfo ? gradeInfo.grade : (score !== null ? "-" : "")
+                "เกรด (Grade)": gradeInfo ? gradeInfo.grade : (score !== null ? "-" : ""),
+
+                // Added Previous Year Columns
+                [`คะแนนปี ${prevYear}`]: prevYearData ? prevYearData.score.toFixed(2) : "-",
+                [`เกรดปี ${prevYear}`]: prevYearData ? prevYearData.grade : "-"
             };
         });
 
@@ -344,7 +366,9 @@ export default function EmployeeListPage() {
             { wch: 20 }, // Department
             { wch: 20 }, // Position
             { wch: 15 }, // Score
-            { wch: 10 }  // Grade
+            { wch: 10 }, // Grade
+            { wch: 15 }, // Prev Score
+            { wch: 10 }  // Prev Grade
         ];
         ws['!cols'] = wscols;
 
@@ -357,32 +381,32 @@ export default function EmployeeListPage() {
     if (loading) return <div className="p-10 text-center text-blue-600">⏳ กำลังโหลดข้อมูล...</div>;
 
     return (
-        <div className="p-10 bg-gray-50 min-h-screen">
-            <div className="flex justify-between items-center mb-6">
+        <div className="p-4 md:p-10 bg-gray-50 min-h-screen">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">จัดการพนักงาน ({filteredEmployees.length} คน)</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">{UI_TEXT.MANAGE_EMPLOYEES} ({filteredEmployees.length} คน)</h1>
                     <p className="text-gray-500 text-sm mt-1">ฐานข้อมูลพนักงานและสิทธิ์การใช้งาน</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 w-full md:w-auto">
                     {/* 🔥 Export Button */}
                     <button
                         onClick={handleExportExcel}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg shadow hover:bg-blue-700 transition-colors"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg shadow hover:bg-blue-700 transition-colors text-sm md:text-base whitespace-nowrap"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                         </svg>
-                        ส่งออกผลประเมิน (Excel)
+                        Export Excel
                     </button>
 
                     <button
                         onClick={() => setIsImportModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg shadow hover:bg-green-700 transition-colors"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg shadow hover:bg-green-700 transition-colors text-sm md:text-base whitespace-nowrap"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                         </svg>
-                        นำเข้าข้อมูล (Excel)
+                        Import Data
                     </button>
                 </div>
             </div>
@@ -394,21 +418,25 @@ export default function EmployeeListPage() {
                     label="สังกัด / แผนก"
                     placeholder="เลือกสังกัด..."
                     options={sectionOptions}
-                    value={selectedSection}
+                    value={filters.section}
                     onChange={(val) => {
-                        setSelectedSection(val);
-                        setSearchTerm(""); // Reset employee search when section changes
+                        setFilter('section', val);
+                        setFilter('info', ""); // Reset employee search when section changes
                     }}
                     className="w-full"
                 />
 
                 {/* Search (Dependent on Section) */}
+                {/* [Debug] Log options immediately before rendering */}
+                {console.log("[Page] Rendering Employee SearchableSelect. Options[0]:", employeeSelectOptions[1])}
+                {/* Search (Dependent on Section) */}
+                {console.log("[Page] Rendering Employee SearchableSelect. Options[0]:", employeeSelectOptions ? employeeSelectOptions[1] : "N/A")}
                 <SearchableSelect
                     label="ค้นหาพนักงาน"
                     placeholder="ค้นหาชื่อ หรือ รหัส..."
                     options={employeeSelectOptions}
-                    value={searchTerm}
-                    onChange={setSearchTerm}
+                    value={filters.info}
+                    onChange={(val) => setFilter('info', val)}
                     className="w-full"
                 />
 
@@ -416,10 +444,9 @@ export default function EmployeeListPage() {
                 <div className="flex pb-1">
                     <button
                         onClick={() => {
-                            setSelectedSection('All');
-                            setSearchTerm('');
+                            resetFilters();
                         }}
-                        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-600 bg-gray-100 border border-transparent rounded-xl hover:bg-slate-200 hover:text-slate-800 transition-colors h-[50px]"
+                        className="flex items-center justify-center w-full md:w-auto gap-2 px-4 py-2.5 text-sm font-medium text-slate-600 bg-gray-100 border border-transparent rounded-xl hover:bg-slate-200 hover:text-slate-800 transition-colors h-[50px]"
                         title="ล้างตัวกรองทั้งหมด"
                     >
                         <RotateCcw className="w-4 h-4" />
@@ -429,7 +456,7 @@ export default function EmployeeListPage() {
             </div>
 
             {/* Toggle Filter */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
                 {/* 🔥 Compare Mode Toggle */}
                 <div className="flex items-center gap-2 mr-4 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -475,36 +502,6 @@ export default function EmployeeListPage() {
                                     ))}
                                 </div>
                             )}
-                            {false && (
-                                <details className="group relative">
-                                    <summary className="flex items-center gap-2 cursor-pointer list-none bg-white border border-gray-200 rounded-md px-3 py-1 text-sm text-gray-700 hover:bg-gray-50 transition shadow-sm">
-                                        <span>เลือกปี ({selectedHistoricals.length})</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3 transition-transform group-open:rotate-180">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                                        </svg>
-                                    </summary>
-
-                                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl p-2 z-50 flex flex-col gap-1">
-                                        {[2024].map(year => (
-                                            <label key={year} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-orange-50 rounded transition select-none">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedHistoricals.includes(year)}
-                                                    onChange={e => {
-                                                        if (e.target.checked) {
-                                                            setSelectedHistoricals(prev => [...prev, year].sort((a, b) => b - a));
-                                                        } else {
-                                                            setSelectedHistoricals(prev => prev.filter(y => y !== year));
-                                                        }
-                                                    }}
-                                                    className="w-4 h-4 text-orange-500 rounded focus:ring-orange-400"
-                                                />
-                                                <span className="text-sm text-gray-700 font-medium">{year}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </details>
-                            )}
                         </div>
                     )}
                 </div>
@@ -517,13 +514,77 @@ export default function EmployeeListPage() {
                         className="hidden" // Custom UI
                     />
                     <Users className="w-5 h-5" />
-                    <span>แสดงเฉพาะรายชื่อผู้ประเมิน</span>
+                    <span>แสดงเฉพาะผู้ประเมิน</span>
                 </label>
             </div>
 
 
-            {/* ตารางแสดงผล */}
-            <div className="overflow-hidden shadow-lg rounded-xl border border-gray-200 bg-white">
+            {/* Mobile Card View (Visible on small screens) */}
+            <div className="block md:hidden space-y-4">
+                {filteredEmployees.length === 0 ? (
+                    <div className="p-10 text-center text-gray-400 bg-white rounded-xl shadow-sm border border-gray-100">
+                        ไม่พบข้อมูลที่ค้นหา
+                    </div>
+                ) : (
+                    filteredEmployees.map((emp: any) => (
+                        <div key={emp.id} className="bg-white p-4 rounded-xl shadow-md border border-gray-100 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm ${emp.isEvaluator ? 'bg-indigo-500' : 'bg-gray-400'}`}>
+                                        {emp.firstName.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-gray-800 text-sm">
+                                            {emp.firstName} {emp.lastName}
+                                        </div>
+                                        <div className="text-xs text-gray-500 font-mono">{emp.employeeId}</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    {emp.evaluationScore !== null ? (
+                                        <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-2 py-1 rounded-lg font-bold shadow-sm text-xs">
+                                            {Number(emp.evaluationScore).toFixed(2)}
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-gray-400 italic">{UI_TEXT.WAITING}</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded-lg">
+                                <div>{emp.section}</div>
+                                <div className="text-right">{emp.position}</div>
+                            </div>
+
+                            <div className="flex justify-between items-center text-xs">
+                                <div className="flex gap-3">
+                                    <span title="มาสาย" className={emp.totalLateMinutes > 0 ? 'text-red-600 font-bold' : 'text-gray-300'}>
+                                        ⏰ {emp.totalLateMinutes > 0 ? emp.totalLateMinutes : '-'}
+                                    </span>
+                                    <span title="ลาป่วย" className={emp.totalSickLeaveDays > 0 ? 'text-orange-600 font-bold' : 'text-gray-300'}>
+                                        🤒 {emp.totalSickLeaveDays > 0 ? emp.totalSickLeaveDays : '-'}
+                                    </span>
+                                    <span title="ขาดงาน" className={emp.totalAbsentDays > 0 ? 'text-red-800 font-black' : 'text-gray-300'}>
+                                        🚫 {emp.totalAbsentDays > 0 ? emp.totalAbsentDays : '-'}
+                                    </span>
+                                    <span title="ใบเตือน" className={emp.warningCount > 0 ? 'text-red-600 font-bold' : 'text-gray-300'}>
+                                        ⚠️ {emp.warningCount > 0 ? emp.warningCount : '-'}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => handleEditClick(emp)}
+                                    className="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-full font-medium transition-colors border border-blue-200"
+                                >
+                                    แก้ไข
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {/* Desktop Table View (Hidden on Mobile) */}
+            <div className="hidden md:block overflow-hidden shadow-lg rounded-xl border border-gray-200 bg-white">
                 <table className="min-w-full">
                     <thead className="bg-gray-100 border-b border-gray-200">
                         <tr>
@@ -590,7 +651,7 @@ export default function EmployeeListPage() {
                                         </td>
 
                                         <td className="p-4 text-center">
-                                            <span className={`inline-block w-8 h-8 leading-8 rounded-full text-sm font-bold ${emp.warningCount > 0 ? 'bg-red-100 text-red-700' : 'text-gray-300 bg-gray-50'}`}>
+                                            <span className={`inline-block w-8 h-8 leading-8 rounded-full text-sm font-bold ${emp.warningCount > 0 ? `${GRADE_COLORS.NI.bg} ${GRADE_COLORS.NI.text}` : `${GRADE_COLORS.NA.text} ${GRADE_COLORS.NA.bg}`}`}>
                                                 {emp.warningCount > 0 ? emp.warningCount : '-'}
                                             </span>
                                         </td>
@@ -602,7 +663,7 @@ export default function EmployeeListPage() {
                                                     {Number(emp.evaluationScore).toFixed(2)}
                                                 </span>
                                             ) : (
-                                                <span className="text-gray-300 text-xs italic">รอประเมิน</span>
+                                                <span className={`${GRADE_COLORS.NA.text} text-xs italic`}>{UI_TEXT.WAITING}</span>
                                             )}
                                         </td>
 
@@ -616,7 +677,7 @@ export default function EmployeeListPage() {
                                                 <td key={year} className="p-4 text-center bg-gray-50/50">
                                                     {grade !== "-" ? (
                                                         <span className={`px-2 py-0.5 rounded text-xs font-bold text-gray-700 ${grade === 'A' ? 'bg-green-100 text-green-700' : 'bg-gray-200'}`}>{grade}</span>
-                                                    ) : <span className="text-gray-300">-</span>}
+                                                    ) : <span className={`${GRADE_COLORS.NA.text} text-xs italic`}>-</span>}
                                                 </td>
                                             );
                                         })}

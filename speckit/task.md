@@ -394,3 +394,78 @@
   1. Portal the Drawer Content alongside the Backdrop.
   2. Lower Backdrop z-index (40) and raise Drawer Content (50).
   3. Clean up Dashboard spacer styles.
+### [T-035] System Refactoring Phase 1 (Core Logic)
+- **Concept:** ลดความซ้ำซ้อนของ Code Filter และ History Fetching ระหว่าง Dashboard และ Employee List
+- **Principle:** DRY (Don't Repeat Yourself) via Custom Hooks
+- **Implementation Detail:**
+  1. Create `useEmployeeFilter` hook to centralize section/grade/search logic.
+  2. Create `useHistoricalData` hook to centralize history fetching logic.
+  3. Refactor `dashboard/page.tsx` and `employees/page.tsx` to use these hooks.
+- **Confirm Task:**
+  - [x] หน้าเว็บใช้งานได้ปกติเหมือนเดิม (Regression Test)
+  - [x] Code ลดความซ้ำซ้อนและอ่านง่ายขึ้น
+### [T-036] System Refactoring Phase 2 (Maintainability)
+- **Concept:** จัดระเบียบ Hardcoded Values (สี, ข้อความ) ให้อยู่ในที่เดียว
+- **Principle:** Centralized Configuration (Constants)
+- **Implementation Detail:**
+  1. Create `src/constants/colors.ts` for grade/chart colors.
+  2. Create `src/constants/text.ts` for recurring UI text.
+  3. Refactor components to import from constants.
+- **Confirm Task:**
+  - [x] Code ไม่มี Magic String/Color code กระจายอยู่
+  - [x] การเปลี่ยนสีธีมทำได้ง่ายในไฟล์เดียว
+
+### [T-037] System Refactoring Phase 3 (Performance)
+- **Concept:** ลดการดึงข้อมูลซ้ำซ้อนเมื่อเปลี่ยนหน้าระหว่าง Dashboard และ Employee List
+- **Principle:** Client-side Caching (Context or Module-level)
+- **Implementation Detail:**
+  1. [x] Implement `EvaluationContext` (Global State).
+  2. [x] Modify `useEvaluation` to consume Context.
+  3. [x] Validate Data Freshness (Instant Switch).
+- **Confirm Task:**
+  - [x] สลับหน้าระหว่าง Dashboard/List แล้วโหลดทันที (ไม่ต้องรอ Spinner)
+  - [x] มีปุ่ม Force Refresh ข้อมูลได้ (via explicit logic or Context internal)
+
+### [T-038] Dashboard Refinements (Post-Launch)
+- **Concept:** ปรับแก้หน้า Dashboard ตาม Feedback
+- **Status:** Done
+- **Items:**
+  1. [x] **Filter Executives:** ไม่นับรวมผู้บริหาร (คนที่ไม่มี evaluatorId) ในจำนวนพนักงานทั้งหมด
+  2.- [x] Resize Donut Chart (Chart 1)
+
+### [T-041] Evaluation UI & Modal Refinements (Re-fixing)
+- **Concept:** ปรับปรุงตำแหน่งของ Modal ประวัติ และตัวช่วยคำนวณให้ถูกต้อง (ใช้ Portal) พร้อมแก้ข้อมูลเกรด
+- **Status:** Done
+- **Sub-tasks:**
+  - [x] **History Modal:** แก้ไขการจัดวางให้กึ่งกลางหน้าจอ (ใช้ Portal เพื่อป้องกันการตกขอบ)
+  - [x] **Score Helper:** ย้ายไปแสดงเป็น Modal แบบ Floating กึ่งกลางจอจริงๆ (ใช้ Portal)
+  - [x] **History Data:** แก้ไขให้แสดงเกรดในปี 2025 (คำนวณเกรดอัตโนมัติหากไม่มีใน DB)
+  - [x] **Visual Layout:** ตรวจสอบ Responsive สำหรับหน้าจอมือถือขนาดเล็ก
+
+### [T-042] Responsive Login Page
+- **Concept:** ปรับปรุงหน้า Login ให้แสดงผลสวยงามบนทุกอุปกรณ์ (Mobile/Tablet/Desktop)
+- **Status:** [x] Done
+- **Implementation Detail:**
+  1. **Mobile:** ลด Padding, เพิ่ม margin ด้านข้างไม่ให้ชิดขอบ, ปรับขนาด Font.
+  2. **Tablet/Desktop:** จัดให้อยู่กึ่งกลางพร้อม Shadow สวยงาม.
+  3. **Visuals:** ตรวจสอบ Gradient และ Element scaling.
+### [T-039] Mobile & UX Refinements
+- **Concept:** ปรับปรุง UX/UI สำหรับการใช้งานบนมือถือและแก้ปัญหาความลื่นไหลของ Flow
+- **Status:** Done
+- **Sub-tasks:**
+  - [x] **Mobile Navigation:** สร้าง Bottom Navigation Bar สำหรับมือถือ
+  - [x] **Filter Bar Layout:** ปรับจัดวางปุ่ม Reset/Compare ให้ประหยัดพื้นที่
+  - [x] **Card View:** แสดงข้อมูล Employee เป็น Card แทน Table ในหน้าจอเล็ก
+  - [x] **Evaluation Flow:** เปลี่ยนจาก Drawer เป็น Redirect ไปหน้าประเมินเต็มจอ
+  - [x] **Evaluation UI:** ปุ่มคะแนนเรียงแถวเดียว, ปรับปุ่มตัวช่วย, เปลี่ยนตัวช่วยเป็น Modal
+### [T-043] Responsive Employee Page & Enhanced Export
+- **Concept:** ปรับปรุงหน้าพนักงานให้แสดงผลเป็น Card บนมือถือ และเพิ่มข้อมูลปีก่อนหน้าใน Excel
+- **Status:** [x] Done
+- **Implementation Detail:**
+  1. **Responsive UI:** สร้าง Card View สำหรับมือถือ (hidden md:block for Table, block md:hidden for Cards).
+  2. **Excel Export:** 
+     - เมื่อกด Export ให้ Fetch ข้อมูลปี `currentYear - 1`
+     - เพิ่มคอลัมน์ `Score (Year-1)` และ `Grade (Year-1)`
+- **Confirm Task:**
+  - [x] Mobile View แสดงเป็น Card สวยงาม
+  - [x] Excel มีข้อมูลปีย้อนหลัง 1 ปี (Score/Grade) ถูกต้อง

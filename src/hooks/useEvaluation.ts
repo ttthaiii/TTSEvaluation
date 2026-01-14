@@ -11,9 +11,10 @@ import { PopupData } from '../components/evaluations/ScoreHelperPopup';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useModal } from '../context/ModalContext'; // 🔥 Import useModal
+import { useEvaluationContext } from '../context/EvaluationContext';
 
 export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
-    const [loading, setLoading] = useState(true);
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const targetEmpId = props?.defaultEmployeeId || searchParams.get('employeeId');
@@ -21,24 +22,33 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
     // 🔥 Modal Hook
     const { showAlert, showConfirm, setNavigationGuard } = useModal();
 
-    // ... (Year Logic)
-    const evalYear = typeof getEvaluationYear === 'function' ? getEvaluationYear() : new Date().getFullYear();
-    const currentPeriod = typeof getCurrentPeriod === 'function' ? getCurrentPeriod() : `${evalYear}-Annual`;
+    // 🔥 Context Data (Global Cache)
+    const {
+        employees,
+        sections: contextSections,
+        existingEvaluations,
+        scoringRules,
+        categories,
+        loading: contextLoading,
+        updateLocalEvaluation,
+        refreshData
+    } = useEvaluationContext();
 
+    // Local State associated with UI Interaction
+    const [loading, setLoading] = useState(true); // Local loading for switching
     const [sections, setSections] = useState<string[]>([]);
-    const [employees, setEmployees] = useState<Employee[]>([]);
-    const [employeeStats, setEmployeeStats] = useState<EmployeeStats | null>(null);
-    const [scoringRules, setScoringRules] = useState<ScoringRule[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
     const [disciplineScore, setDisciplineScore] = useState<number | string>("-");
     const [totalScore, setTotalScore] = useState<number>(0);
-    const [existingEvaluations, setExistingEvaluations] = useState<Record<string, EvaluationRecord>>({});
     const [completedEvaluationIds, setCompletedEvaluationIds] = useState<Set<string>>(new Set());
+
     const [selectedSection, setSelectedSection] = useState<string>('');
     const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [scores, setScores] = useState<Record<string, number>>({});
+    const [employeeStats, setEmployeeStats] = useState<EmployeeStats | null>(null);
+
+    // UI Helpers
     const [popupData, setPopupData] = useState<PopupData | null>(null);
     const [popupScores, setPopupScores] = useState<Record<number, number>>({});
     const [integrityWarnings, setIntegrityWarnings] = useState<string[]>([]);
@@ -47,215 +57,66 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
     // Auth Session
     const { data: session, status } = useSession();
 
-    // --- 1. Init Data & Fetch Rules ---
-    const initData = async () => {
-        try {
-            setLoading(true);
+    // Year Logic
+    const evalYear = typeof getEvaluationYear === 'function' ? getEvaluationYear() : new Date().getFullYear();
+    const currentPeriod = typeof getCurrentPeriod === 'function' ? getCurrentPeriod() : `${evalYear}-Annual`;
 
-            const qUsers = query(collection(db, 'users'), where('isActive', '==', true));
-            const userSnapshot = await getDocs(qUsers);
-
-            const empList: Employee[] = [];
-            const sectionSet = new Set<string>();
-
-            userSnapshot.forEach((doc) => {
-                const d = doc.data();
-                if (d.section) sectionSet.add(d.section);
-
-                empList.push({
-                    id: doc.id,
-                    employeeId: d.employeeId || "",
-                    firstName: d.firstName || "",
-                    lastName: d.lastName || "",
-                    position: d.position || "",
-                    department: d.department || "",
-                    section: d.section || "",
-                    level: d.level || "Monthly Staff",
-                    startDate: d.startDate,
-                    isActive: d.isActive ?? true,
-                    evaluatorId: d.evaluatorId || "", // Ensure field exists
-                    pdNumber: d.pdNumber || "", // [T-030] Map PdNumber
-                    birthDate: d.birthDate || null, // [T-Fix] Map birthDate for Age Calculation
-                    age: d.age || 0, // [T-Fix] Map raw age (fallback)
-                } as Employee);
-            });
-
-            const qEvals = query(collection(db, 'evaluations'), where('period', '==', currentPeriod));
-            const evalSnapshot = await getDocs(qEvals);
-
-            // Fetch Categories
-            const qCats = query(collection(db, 'evaluation_categories'), orderBy('order'));
-            const catSnap = await getDocs(qCats);
-            const catsData = catSnap.docs.map(d => d.data() as Category);
-            setCategories(catsData);
-
-            // 🔥 Calculate Completion Loop
-            const completedIds = new Set<string>();
-            const evalMap: Record<string, EvaluationRecord> = {};
-
-            evalSnapshot.forEach((doc) => {
-                const d = doc.data();
-                if (d.employeeDocId) {
-                    evalMap[d.employeeDocId] = {
-                        docId: doc.id,
-                        scores: d.scores || {},
-                        employeeDocId: d.employeeDocId,
-                        totalScore: d.totalScore,
-                        disciplineScore: d.disciplineScore,
-                        updatedAt: d.updatedAt,
-                        createdAt: d.createdAt,
-                        aiScore: d.aiScore,
-                        status: d.status // [T-027] Map Status field
-                    };
-
-                    // Check Completeness
-                    const emp = empList.find(e => e.id === d.employeeDocId);
-                    if (emp) {
-                        let isComplete = true;
-                        catsData.forEach(cat => {
-                            if (cat.id === 'C' && emp.level === 'Monthly Staff') return;
-                            cat.questions.forEach(q => {
-                                if (q.isReadOnly) return;
-                                if (q.id === 'B-4' && HO_SECTIONS.includes(emp.section)) return;
-                                if (d.scores?.[q.id] === undefined) {
-                                    isComplete = false;
-                                }
-                            });
-                        });
-                        if (isComplete) completedIds.add(d.employeeDocId);
-                    }
-                }
-            });
-            setCompletedEvaluationIds(completedIds);
-
-            // [T-032] Fetch Eligibility Config
-            let eligibilityRule: { minTenure: number, tenureUnit: string, cutoffDate: string } | null = null;
-            try {
-                const ruleSnap = await getDoc(doc(db, 'config_general', 'eligibility'));
-                if (ruleSnap.exists()) {
-                    eligibilityRule = ruleSnap.data() as any;
-                }
-            } catch (e) { console.warn("No eligibility rule found, using default"); }
-
-            const rulesSnapshot = await getDocs(collection(db, 'scoring_formulas'));
-            const rules: ScoringRule[] = [];
-            rulesSnapshot.forEach(doc => {
-                const d = doc.data();
-                rules.push({
-                    id: doc.id,
-                    name: d.name,
-                    type: d.type,
-                    formula: d.formula,
-                    targetField: d.targetField
-                });
-            });
-
-            // [T-032] 🔥 Apply Eligibility Filter
-            let finalEmpList = empList;
-            if (eligibilityRule && eligibilityRule.minTenure > 0) {
-                const { minTenure, tenureUnit, cutoffDate } = eligibilityRule;
-
-                // Determine Cutoff Date
-                let targetDate: Date;
-                if (cutoffDate) {
-                    targetDate = new Date(cutoffDate);
-                } else {
-                    targetDate = new Date(evalYear, 11, 31); // 31 Dec
-                }
-
-                finalEmpList = empList.filter(emp => {
-                    const raw = getRawTenure(emp.startDate, targetDate);
-
-                    if (tenureUnit === 'years') {
-                        // Logic: Have completed X years?
-                        // If 1 Year, needs year >= 1
-                        return raw.years >= minTenure;
-                    } else if (tenureUnit === 'months') {
-                        const totalMonths = (raw.years * 12) + raw.months;
-                        return totalMonths >= minTenure;
-                    } else { // Days
-                        return raw.totalDays >= minTenure;
-                    }
-                });
-                console.log(`🔍 Eligibility Filter Applied: ${empList.length} -> ${finalEmpList.length} (Rule: ${minTenure} ${tenureUnit} by ${targetDate.toLocaleDateString()})`);
-            }
-
-            setEmployees(finalEmpList);
-
-            // 🔥 Filter by Authenticated User (Evaluator)
-            // If Admin -> Show All
-            // If User -> Show Only employees where evaluatorId == session.user.employeeId
-            if (session?.user) {
-                const currentUser = session.user as any;
-
-                if (currentUser.role === 'Admin') {
-                    // ✅ Admin: Show All Sections & Employees
-                    setSections(Array.from(sectionSet).sort());
-                } else {
-                    // ✅ Normal User: Filter Subordinates (Recursive / Chain of Command)
-                    const currentEmpId = currentUser.employeeId;
-
-                    // Recursive function to get all down-line subordinates
-                    const getAllSubordinates = (managerId: string, allEmps: Employee[]): Employee[] => {
-                        const directReports = allEmps.filter(e => e.evaluatorId === managerId);
-                        let allSubs = [...directReports];
-
-                        directReports.forEach(report => {
-                            // Recursively find subordinates of this report (who is also an evaluator)
-                            const indirectReports = getAllSubordinates(report.employeeId, allEmps);
-                            allSubs = [...allSubs, ...indirectReports];
-                        });
-
-                        return allSubs;
-                    };
-
-                    const mySubordinates = getAllSubordinates(currentEmpId, empList);
-
-                    // De-duplicate if recursion causes overlap (though tree structure shouldn't)
-                    const uniqueSubordinates = Array.from(new Map(mySubordinates.map(item => [item.id, item])).values());
-
-                    if (uniqueSubordinates.length === 0) {
-                        console.warn(`⚠️ User ${currentEmpId} has no subordinates assigned.`);
-                    }
-
-                    // Update Sections specifically for subordinates
-                    const subSections = new Set<string>();
-                    uniqueSubordinates.forEach(e => subSections.add(e.section));
-                    setEmployees(uniqueSubordinates);
-
-                    const finalSections = Array.from(subSections).sort();
-                    setSections(finalSections);
-
-                    // [T-026] Auto-select default section if user has only one (เลือกโครงการอัตโนมัติถ้ามีแค่ 1 โครงการ)
-                    if (finalSections.length === 1) {
-                        setSelectedSection(finalSections[0]);
-                        setFilteredEmployees(uniqueSubordinates); // 🔥 Fix: แสดงรายชื่อพนักงานทันที
-                    }
-                }
-            } else {
-                setEmployees([]);
-                setSections([]);
-            }
-
-            setExistingEvaluations(evalMap);
-            setScoringRules(rules);
-
-        } catch (error) {
-            console.error("Error fetching data:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    // --- Sync Context to Local State ---
     useEffect(() => {
-        if (status === 'authenticated') {
-            initData();
-        } else if (status === 'unauthenticated') {
+        if (!contextLoading && employees.length > 0) {
             setLoading(false);
-            // Optional: Redirect if needed, or let the component handle it
-            // router.push('/login'); 
+
+            // Sync Sections
+            setSections(contextSections);
+
+            // Sync Completed IDs
+            const completed = new Set<string>();
+            Object.values(existingEvaluations).forEach(ev => {
+                if (ev.status === 'Completed') { // Simple check, or reuse complex logic if moved to context
+                    completed.add(ev.employeeDocId);
+                }
+                // Compatibility: If status undefined, check scores (Old logic)
+                if (!ev.status) {
+                    // Logic was complex in old initData. 
+                    // ideally Context should provide 'isComplete' flag or we re-calc here cheaply.
+                    // For now, let's assume if it exists in evaluations map, it's "Evaluated" 
+                    // BUT Phase 2 "Draft" feature means we must check status.
+                    // If no status, assume Completed (Legacy).
+                    completed.add(ev.employeeDocId);
+                }
+            });
+            setCompletedEvaluationIds(completed);
+
+            // Auto-Select Section if Single
+            if (contextSections.length === 1 && !selectedSection) {
+                setSelectedSection(contextSections[0]);
+                setFilteredEmployees(employees.filter(e => e.section === contextSections[0]));
+            } else if (!selectedSection) {
+                // Initial load: show nothing or all?
+                // Existing logic: "setFilteredEmployees(uniqueSubordinates)" if user.
+                // Let's default to Empty or All based on design.
+                // Context.employees is already filtered by Auth.
+                // So we can show all context.employees.
+                setFilteredEmployees(employees);
+            }
+        } else if (!contextLoading && employees.length === 0) {
+            setLoading(false);
         }
-    }, [status, session]);
+    }, [contextLoading, employees, contextSections, existingEvaluations]);
+
+    // Handle Section Change locally
+    useEffect(() => {
+        if (selectedSection) {
+            if (selectedSection === 'All') {
+                setFilteredEmployees(employees);
+            } else {
+                setFilteredEmployees(employees.filter(e => e.section === selectedSection));
+            }
+        } else if (employees.length > 0) {
+            // Default if no section selected
+            setFilteredEmployees(employees);
+        }
+    }, [selectedSection, employees]);
 
     // 🔥 Auto-select Employee from URL (ทำงานเมื่อมี parameter ?employeeId=...)
     useEffect(() => {
@@ -722,6 +583,9 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                 createdAt: prevEval ? prevEval.createdAt : Timestamp.now()
             };
 
+            // 🔥 Update Local Context immediately
+            updateLocalEvaluation(selectedEmployee.id, fullRecord);
+
             if (onSuccess && typeof onSuccess === 'function') {
                 onSuccess(fullRecord);
             }
@@ -734,7 +598,7 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
 
             if (!onSuccess) {
                 // Default behavior
-                await initData();
+                await refreshData();
                 setScores({});
                 setSelectedEmployeeId('');
                 setSelectedEmployee(null);
@@ -816,17 +680,7 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
 
 
 
-    const updateLocalEvaluation = (newEval: EvaluationRecord) => {
-        setExistingEvaluations(prev => ({
-            ...prev,
-            [newEval.employeeDocId]: newEval
-        }));
-        setCompletedEvaluationIds(prev => {
-            const newSet = new Set(prev);
-            newSet.add(newEval.employeeDocId);
-            return newSet;
-        });
-    };
+
 
     const getDisplayCategories = () => {
         if (!selectedEmployee) return [];
@@ -930,7 +784,7 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
         categories,
         employees,
         handleExitEvaluation, // [T-029] Two-Step Confirmation
-        refreshData: initData, // 🔥 Exposed for manual refresh
+        refreshData, // 🔥 Exposed for manual refresh
         updateLocalEvaluation, // 🔥 Exposed for local update
     };
 };

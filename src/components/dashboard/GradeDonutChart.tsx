@@ -25,7 +25,7 @@ export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data, onGradeC
     const total = data.length;
 
     return (
-        <div className="h-[250px] w-full relative">
+        <div className="h-[300px] w-full relative">
             <style>{`
                 .recharts-sector:focus, .recharts-pie:focus, path:focus { outline: none !important; }
             `}</style>
@@ -34,9 +34,9 @@ export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data, onGradeC
                     <Pie
                         data={chartData}
                         cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={90}
+                        cy="55%"
+                        innerRadius={80}
+                        outerRadius={110}
                         paddingAngle={0}
                         dataKey="value"
                         onClick={(data) => onGradeClick && onGradeClick(data.name)}
@@ -48,12 +48,12 @@ export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data, onGradeC
                         ))}
                     </Pie>
                     <Tooltip itemStyle={{ color: '#000' }} />
-                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                    <Legend wrapperStyle={{ paddingTop: '40px' }} verticalAlign="bottom" />
                 </PieChart>
             </ResponsiveContainer>
 
             {/* Center Label */}
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[60%] text-center">
+            <div className="absolute top-[48%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
                 <div className="text-xs text-slate-500">จำนวนพนักงาน</div>
                 <div className="text-3xl font-bold text-slate-800">{total}</div>
                 <div className="text-xs text-slate-500">คน</div>

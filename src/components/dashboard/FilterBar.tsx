@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { GradeCriteria } from '@/utils/grade-calculation';
-import { SearchableSelect } from '../ui/SearchableSelect';
+import { SearchableSelect, SearchableSelectOption } from '../ui/SearchableSelect';
 import { RotateCcw } from 'lucide-react';
 
 interface FilterBarProps {
@@ -16,7 +16,7 @@ interface FilterBarProps {
     pdNumbers: string[];
     selectedPdNumber: string;
     onPdNumberChange: (val: string) => void;
-    employeeOptions: { id: string; name: string; searchTerms?: string }[];
+    employeeOptions: SearchableSelectOption[];
     onReset?: () => void;
     // [T-History] Comparison Props
     isCompareMode?: boolean;
@@ -78,11 +78,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
     const empOptions = useMemo(() => [
         { value: '', label: 'ทั้งหมด (All)' }, // Empty string usually clears the filter in parent logic if we map '' to 'All'-like behavior or !val check
-        ...employeeOptions.map(e => ({
-            value: e.id, // This is the employeeId (text)
-            label: e.name,
-            searchTerms: e.searchTerms
-        }))
+        ...employeeOptions // Pass through directly as they are already SearchableSelectOption
     ], [employeeOptions]);
 
     return (
@@ -134,11 +130,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 </div>
 
                 {/* Counter Badge & Reset Button */}
-                <div className="flex-shrink-0 flex flex-col sm:flex-row items-end sm:items-center gap-3 xl:mb-1">
+                <div className="flex-shrink-0 flex flex-row flex-wrap items-center justify-end gap-3 w-full xl:w-auto xl:mb-1">
 
                     {/* [T-History] Comparison UI */}
                     {onCompareModeChange && (
-                        <div className="flex items-center gap-2 mr-2 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 h-[42px]">
+                        <div className="flex items-center gap-2 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 h-[40px]">
                             <label className="flex items-center gap-2 cursor-pointer select-none">
                                 <input
                                     type="checkbox"
@@ -146,17 +142,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                                     onChange={e => onCompareModeChange(e.target.checked)}
                                     className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                                 />
-                                <span className="text-sm font-bold text-orange-700 whitespace-nowrap">เปรียบเทียบปี</span>
+                                <span className="text-xs sm:text-sm font-bold text-orange-700 whitespace-nowrap">เทียบปี</span>
                             </label>
 
                             {isCompareMode && onYearChange && (
-                                <div className="relative ml-2" ref={dropdownRef}>
+                                <div className="relative ml-1 sm:ml-2" ref={dropdownRef}>
                                     <button
                                         onClick={() => setIsYearDropdownOpen(!isYearDropdownOpen)}
-                                        className="flex items-center gap-2 cursor-pointer bg-white border border-gray-200 rounded-md px-3 py-1 text-sm text-gray-700 hover:bg-gray-50 transition shadow-sm outline-none active:scale-95 duration-100"
+                                        className="flex items-center gap-1 sm:gap-2 cursor-pointer bg-white border border-gray-200 rounded-md px-2 py-1 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition shadow-sm outline-none active:scale-95 duration-100"
                                     >
-                                        <span>เลือกปี ({selectedYears.length})</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${isYearDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <span>ปี ({selectedYears.length})</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 sm:h-4 sm:w-4 transition-transform ${isYearDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </button>
@@ -186,14 +182,14 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                     {onReset && (
                         <button
                             onClick={onReset}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-orange-600 transition-colors"
+                            className="flex items-center gap-1 sm:gap-2 px-3 py-2 text-xs sm:text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-orange-600 transition-colors h-[40px]"
                         >
-                            <RotateCcw className="w-4 h-4" />
-                            รีเซ็ต
+                            <RotateCcw className="w-3 h-3 sm:w-4 sm:w-4" />
+                            <span className="hidden sm:inline">รีเซ็ต</span>
                         </button>
                     )}
-                    <div className="bg-orange-50 text-orange-700 px-4 py-2 rounded-lg border border-orange-100 font-medium whitespace-nowrap">
-                        พบข้อมูล {totalCount} รายการ
+                    <div className="bg-orange-50 text-orange-700 px-3 py-2 rounded-lg border border-orange-100 font-medium whitespace-nowrap text-xs sm:text-sm h-[40px] flex items-center">
+                        {totalCount} รายการ
                     </div>
                 </div>
             </div>
