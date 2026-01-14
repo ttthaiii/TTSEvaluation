@@ -556,8 +556,48 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                     year: evalYear
                 } as any;
             }
+
+            // 🔥 Merge scores from yearlyStats (e.g. AI Score, imported data)
+            // This ensures imported scores appear immediately even if not yet saved to 'evaluations'
+            const mergedScores = { ...currentLoadedScores };
+
+            // 1. Explicit mapping for AI Score (if exists in stats)
+            if ((statsData as any).aiScore !== undefined) {
+                // Check if there is a corresponding question for AI Score (usually 'aiScore' or 'AI-Score')
+                // We simply check if any question ID matches 'aiScore' or we force it if legacy support needed
+                // But better to just merge generic keys:
+            }
+
+            // 2. Generic Merge: Check ALL Questions. If yearStat has matching key, use it (if not already evaluated)
+            categories.forEach(cat => {
+                cat.questions.forEach(q => {
+                    if (q.isReadOnly) {
+                        // Priorities:
+                        // 1. Existing Evaluation Score (already in currentLoadedScores)
+                        // 2. Yearly Stats (Imported Data)
+                        // 3. Default 0/null
+
+                        if (mergedScores[q.id] === undefined) {
+                            const cleanKey = q.id.replace(/[ -]/g, '_'); // Matches ImportPage logic
+                            // Try exact ID, then cleaned ID, then 'aiScore' special case
+                            let val = (statsData as any)[q.id] ?? (statsData as any)[cleanKey];
+
+                            // Special Case for AI Score which might vary in naming
+                            if (val === undefined && (q.title.includes('AI') || q.id.toLowerCase().includes('ai'))) {
+                                val = (statsData as any)['aiScore'];
+                            }
+
+                            if (val !== undefined) {
+                                mergedScores[q.id] = val;
+                            }
+                        }
+                    }
+                });
+            });
+
             setEmployeeStats(statsData);
-            runDisciplineCalculation(statsData, currentLoadedScores, emp);
+            setScores(mergedScores); // Update state
+            runDisciplineCalculation(statsData, mergedScores, emp);
         } catch (err) {
             console.error("Error fetching stats:", err);
         }

@@ -8,7 +8,8 @@ export interface EmployeeStats {
     totalAbsentDays: number;
     warningCount: number;
     year: number;
-    // aiScore removed (legacy)
+    // aiScore removed but kept flexibile for backward compatibility if needed
+    [key: string]: any;
 }
 
 export interface EmployeeStatsCardProps {

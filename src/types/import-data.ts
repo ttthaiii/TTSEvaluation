@@ -53,3 +53,10 @@ export interface WarningRow {
   "รายละเอียดความผิด": string;
   "หมายเหตุ": string;
 }
+
+// 4. โครงสร้างสำหรับ คะแนนหมวดอื่นๆ (Other)
+export interface OtherScoreRow {
+  "ลำดับ": number;
+  "รหัสพนักงาน": string;
+  [key: string]: any; // Dynamic columns for scores
+}

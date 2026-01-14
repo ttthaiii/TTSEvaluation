@@ -10,20 +10,26 @@ interface EmployeeEditModalProps {
     employeeName: string;
     onSaveSuccess: () => void;
     currentYear: number;
+    isEvaluator?: boolean; // New prop from parent
 }
 
-export default function EmployeeEditModal({ isOpen, onClose, employeeId, employeeName, onSaveSuccess, currentYear }: EmployeeEditModalProps) {
+export default function EmployeeEditModal({ isOpen, onClose, employeeId, employeeName, onSaveSuccess, currentYear, isEvaluator }: EmployeeEditModalProps) {
     const { showAlert } = useModal(); // 🔥
     const [activeTab, setActiveTab] = useState<'stats' | 'security'>('stats');
     const [loading, setLoading] = useState(false);
+    const [employeeRole, setEmployeeRole] = useState<string>('User'); // Default to User
 
     // Stats Data
     const [stats, setStats] = useState({
         totalLateMinutes: 0,
         totalSickLeaveDays: 0,
         totalAbsentDays: 0,
-        warningCount: 0
+        warningCount: 0,
+        aiScore: 0 // New AI Score
     });
+
+    const [dynamicScores, setDynamicScores] = useState<Record<string, number>>({});
+    const [questionMap, setQuestionMap] = useState<Record<string, string>>({}); // Map ID -> Title
 
     // Security Data
     const [newPassword, setNewPassword] = useState('');
@@ -38,6 +44,20 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
     const fetchData = async () => {
         setLoading(true);
         try {
+            // Fetch evaluation categories for mapping
+            const { collection, getDocs } = await import('firebase/firestore');
+            const catsSnap = await getDocs(collection(db, 'evaluation_categories'));
+            const qMap: Record<string, string> = {};
+            catsSnap.forEach(doc => {
+                const data = doc.data();
+                if (data.questions) {
+                    data.questions.forEach((q: any) => {
+                        qMap[q.id] = q.title;
+                    });
+                }
+            });
+            setQuestionMap(qMap);
+
             // Fetch Yearly Stats
             const statsRef = doc(db, 'users', employeeId, 'yearlyStats', String(currentYear));
             const statsSnap = await getDoc(statsRef);
@@ -46,37 +66,55 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
             const userDoc = await getDoc(doc(db, 'users', employeeId));
             const ud = userDoc.data();
 
+            if (ud) {
+                setEmployeeRole(ud.role || 'User'); // Set Role
+            }
+
             if (statsSnap.exists()) {
                 const data = statsSnap.data();
                 setStats({
                     totalLateMinutes: data.totalLateMinutes || 0,
                     totalSickLeaveDays: data.totalSickLeaveDays || 0,
                     totalAbsentDays: data.totalAbsentDays || 0,
-                    warningCount: data.warningCount || 0
+                    warningCount: data.warningCount || 0,
+                    aiScore: data.aiScore || 0
                 });
+
+                // Extract Dynamic Scores
+                const standardKeys = ['totalLateMinutes', 'totalSickLeaveDays', 'totalAbsentDays', 'warningCount', 'aiScore', 'year'];
+                const extraScores: Record<string, number> = {};
+                Object.keys(data).forEach(key => {
+                    if (!standardKeys.includes(key)) {
+                        extraScores[key] = data[key];
+                    }
+                });
+                setDynamicScores(extraScores);
             } else if (ud) {
-                // If subcollection doesn't exist, try fetching from main doc as fallback or reset
+                // ... fallback logic
                 setStats({
                     totalLateMinutes: ud.totalLateMinutes || 0,
                     totalSickLeaveDays: ud.totalSickLeaveDays || 0,
                     totalAbsentDays: ud.totalAbsentDays || 0,
-                    warningCount: ud.warningCount || 0
+                    warningCount: ud.warningCount || 0,
+                    aiScore: ud.aiScore || 0
                 });
+                setDynamicScores({});
             } else {
-                // Reset stats if neither yearlyStats nor main user doc has them
                 setStats({
                     totalLateMinutes: 0,
                     totalSickLeaveDays: 0,
                     totalAbsentDays: 0,
-                    warningCount: 0
+                    warningCount: 0,
+                    aiScore: 0
                 });
+                setDynamicScores({});
             }
 
             // Set Security Fields
             if (ud) {
-                setUsername(ud.username || ud.employeeId || ''); // Default to employeeId (field) if no custom username
+                setUsername(ud.username || ud.employeeId || '');
             } else {
-                setUsername(''); // Reset if no user doc
+                setUsername('');
             }
             setNewPassword('');
 
@@ -87,6 +125,13 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
         }
     };
 
+    const handleDynamicScoreChange = (key: string, value: string) => {
+        setDynamicScores(prev => ({
+            ...prev,
+            [key]: Number(value)
+        }));
+    };
+
     const handleSaveStats = async () => {
         setLoading(true);
         try {
@@ -94,12 +139,11 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
             const statsRef = doc(db, 'users', employeeId, 'yearlyStats', String(currentYear));
             // Check existence to decide set(merge) vs update? set with merge is safest
             await import('firebase/firestore').then(mod => {
-                mod.setDoc(statsRef, { ...stats, year: currentYear }, { merge: true });
+                mod.setDoc(statsRef, { ...stats, ...dynamicScores, year: currentYear }, { merge: true });
             });
 
-            // 2. Update Main Doc (for quick access if needed, though we primarily use yearlyStats now)
-            // But to be consistent with import logic:
             // 2. Update Main Doc (Always update main doc to reflect the current evaluation/stats in the list)
+            // Note: We might NOT want to spam main doc with all dynamic scores, but standard stats yes.
             const mainRef = doc(db, 'users', employeeId);
             await updateDoc(mainRef, stats);
 
@@ -140,13 +184,24 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
 
     if (!isOpen) return null;
 
+    // Determine if Security Tab should be visible
+    // Hide if role is 'user' (normal employee) UNLESS they are explicitly marked as Evaluator
+    const showSecurityTab = employeeRole.toLowerCase() !== 'user' || !!isEvaluator;
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in">
                 {/* Header */}
                 <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
                     <div>
-                        <h3 className="font-bold text-lg text-gray-800">แก้ไขข้อมูลพนักงาน</h3>
+                        <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                            แก้ไขข้อมูลพนักงาน
+                            {isEvaluator && (
+                                <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full border border-indigo-200">
+                                    Evaluator
+                                </span>
+                            )}
+                        </h3>
                         <p className="text-sm text-gray-500">{employeeName}</p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
@@ -155,23 +210,25 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                 {/* Tabs */}
                 <div className="flex border-b">
                     <button
-                        className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'stats' ? 'border-b-2 border-blue-600 text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'stats' ? 'border-b-2 border-orange-600 text-orange-600 bg-orange-50' : 'text-gray-500 hover:text-gray-700'}`}
                         onClick={() => setActiveTab('stats')}
                     >
-                        📊 สถิติขาด/ลา/มาสาย (ปี {currentYear})
+                        📊 สถิติ/คะแนน (ปี {currentYear})
                     </button>
-                    <button
-                        className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'security' ? 'border-b-2 border-blue-600 text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'}`}
-                        onClick={() => setActiveTab('security')}
-                    >
-                        🔐 ตั้งรหัสผ่าน / ความปลอดภัย
-                    </button>
+                    {showSecurityTab && (
+                        <button
+                            className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'security' ? 'border-b-2 border-orange-600 text-orange-600 bg-orange-50' : 'text-gray-500 hover:text-gray-700'}`}
+                            onClick={() => setActiveTab('security')}
+                        >
+                            🔐 ตั้งรหัสผ่าน / ความปลอดภัย
+                        </button>
+                    )}
                 </div>
 
                 {/* Content */}
                 <div className="p-6">
                     {loading ? (
-                        <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>
+                        <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div></div>
                     ) : (
                         <>
                             {activeTab === 'stats' && (
@@ -183,7 +240,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                                 type="number"
                                                 value={stats.totalLateMinutes}
                                                 onChange={e => setStats({ ...stats, totalLateMinutes: Number(e.target.value) })}
-                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                             />
                                         </div>
                                         <div>
@@ -192,7 +249,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                                 type="number"
                                                 value={stats.warningCount}
                                                 onChange={e => setStats({ ...stats, warningCount: Number(e.target.value) })}
-                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                             />
                                         </div>
                                         <div>
@@ -201,7 +258,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                                 type="number" step="0.5"
                                                 value={stats.totalSickLeaveDays}
                                                 onChange={e => setStats({ ...stats, totalSickLeaveDays: Number(e.target.value) })}
-                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                             />
                                         </div>
                                         <div>
@@ -210,20 +267,76 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                                 type="number" step="0.5"
                                                 value={stats.totalAbsentDays}
                                                 onChange={e => setStats({ ...stats, totalAbsentDays: Number(e.target.value) })}
-                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                             />
+                                        </div>
+                                        <div className="col-span-2 border-t pt-4 mt-2">
+                                            <h4 className="font-bold text-gray-800 mb-2 text-sm">คะแนนส่วนเพิ่ม (Additional Scores)</h4>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {/* Combine Explicit AI Score + Dynamic Scores */}
+                                                {/* If 'aiScore' exists in stats, render it first here treated as dynamic item */}
+                                                {/* Note: 'aiScore' is inside stats object, so we manually include it if needed or check dynamicScores */}
+
+                                                {/* Render 'aiScore' explicitly ONLY if it is not 0 (to avoid confusion) OR if user wants to see it. 
+                                                    But user said [0]-1 IS AI Score. So we prioritize the map. 
+                                                    If stats.aiScore is used, show it. If [0]-1 is used, show it with mapped name.
+                                                */}
+
+                                                {/* Loop through all dynamic scores including mapped keys */}
+                                                {Object.entries(dynamicScores).map(([key, val]) => {
+                                                    // Resolve Title
+                                                    let title = key;
+                                                    if (questionMap[key]) {
+                                                        title = questionMap[key]; // Use mapped title (e.g. AI Score)
+                                                    } else if (key === 'aiScore' || key === 'AI Score') {
+                                                        title = 'AI Score';
+                                                    } else {
+                                                        title = key.replace(/_/g, ' ');
+                                                    }
+
+                                                    return (
+                                                        <div key={key}>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-1 capitalize truncate" title={title}>
+                                                                {title} <span className="text-gray-400 text-xs font-normal">({key})</span>
+                                                            </label>
+                                                            <input
+                                                                type="number" step="0.1"
+                                                                value={val}
+                                                                onChange={e => handleDynamicScoreChange(key, e.target.value)}
+                                                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-gray-50"
+                                                            />
+                                                        </div>
+                                                    );
+                                                })}
+
+                                                {/* If stats.aiScore exists and isn't covered in dynamicScores (it shouldn't be), consider showing it if > 0 */}
+                                                {stats.aiScore > 0 && !dynamicScores['aiScore'] && (
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">AI Score (Manual)</label>
+                                                        <input
+                                                            type="number" step="0.1"
+                                                            value={stats.aiScore}
+                                                            onChange={e => setStats({ ...stats, aiScore: Number(e.target.value) })}
+                                                            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-orange-50/30"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <p className="text-xs text-gray-400 mt-2">คะแนนเหล่านี้จะถูกนำไปรวมคำนวณเกรดตามสูตรที่กำหนด</p>
                                         </div>
                                     </div>
                                     <button
                                         onClick={handleSaveStats}
-                                        className="w-full mt-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                                        className="w-full mt-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium"
                                     >
                                         บันทึกการเปลี่ยนแปลง
                                     </button>
                                 </div>
                             )}
 
-                            {activeTab === 'security' && (
+                            {activeTab === 'security' && showSecurityTab && (
                                 <div className="space-y-4">
                                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
                                         ⚠️ <b>หมายเหตุ:</b><br />
@@ -238,7 +351,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                             placeholder="Ex. admin, manager01"
                                             value={username}
                                             onChange={e => setUsername(e.target.value)}
-                                            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                         />
                                     </div>
 
@@ -249,7 +362,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                             placeholder="กรอกรหัสผ่านใหม่ (ว่างไว้ถ้าไม่เปลี่ยน)..."
                                             value={newPassword}
                                             onChange={e => setNewPassword(e.target.value)}
-                                            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                                         />
                                     </div>
                                     <button

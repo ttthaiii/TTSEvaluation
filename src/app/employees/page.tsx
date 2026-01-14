@@ -61,7 +61,7 @@ export default function EmployeeListPage() {
 
     // 👇 State for Edit Modal
     const [editModalOpen, setEditModalOpen] = useState(false);
-    const [selectedEmployee, setSelectedEmployee] = useState<{ id: string, name: string } | null>(null);
+    const [selectedEmployee, setSelectedEmployee] = useState<{ id: string, name: string, isEvaluator?: boolean } | null>(null);
 
     // ดึงปีปัจจุบันมาแสดงในหัวตาราง
     const currentEvalYear = getEvaluationYear ? getEvaluationYear() : new Date().getFullYear();
@@ -158,7 +158,11 @@ export default function EmployeeListPage() {
     }, []);
 
     const handleEditClick = (emp: Employee) => {
-        setSelectedEmployee({ id: emp.id, name: `${emp.firstName} ${emp.lastName}` });
+        setSelectedEmployee({
+            id: emp.id,
+            name: `${emp.firstName} ${emp.lastName}`,
+            isEvaluator: emp.isEvaluator
+        });
         setEditModalOpen(true);
     };
 
@@ -401,6 +405,7 @@ export default function EmployeeListPage() {
                     onClose={() => setEditModalOpen(false)}
                     employeeId={selectedEmployee.id}
                     employeeName={selectedEmployee.name}
+                    isEvaluator={(selectedEmployee as any).isEvaluator}
                     currentYear={Number(currentEvalYear)} // Cast to number just in case
                     onSaveSuccess={() => {
                         setEditModalOpen(false);
@@ -417,10 +422,14 @@ export default function EmployeeListPage() {
 // --- ImportModal Component ---
 function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
     const { showAlert, showConfirm } = useModal(); // 🔥 Use Modal Hook
-    const [fileType, setFileType] = useState<'users' | 'attendance' | 'leave' | 'warning' | 'score'>('attendance');
+    const [fileType, setFileType] = useState<'users' | 'attendance' | 'leave' | 'warning' | 'score' | 'other'>('attendance');
     const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
     const [selectedScoreItem, setSelectedScoreItem] = useState<string>('');
     const [scoreItems, setScoreItems] = useState<any[]>([]);
+
+    // ...
+
+
 
     const [loading, setLoading] = useState(false);
     const [fileName, setFileName] = useState('');
@@ -535,6 +544,9 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 // Score template is dynamic based on category, so keep generation
                 generateScoreTemplate();
                 return;
+            case 'other':
+                generateOtherTemplate();
+                return;
         }
 
         if (url) {
@@ -588,6 +600,37 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
             XLSX.writeFile(wb, `Template_Score_${selectedScoreItem || 'General'}.xlsx`);
         } catch (error) {
             console.error("Error generating score template:", error);
+            await showAlert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการสร้าง Template");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const generateOtherTemplate = async () => {
+        setLoading(true);
+        try {
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const data: any[] = [];
+            usersSnapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.isActive !== false) {
+                    data.push({
+                        "รหัสพนักงาน": d.employeeId || "",
+                        "ชื่อ-นามสกุล": `${d.firstName} ${d.lastName}`,
+                        "AI Score": "",
+                        "Project Score": "",
+                        "Other Score": ""
+                    });
+                }
+            });
+            data.sort((a, b) => a["รหัสพนักงาน"].localeCompare(b["รหัสพนักงาน"]));
+
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "OtherScores");
+            XLSX.writeFile(wb, "Template_Other_Scores.xlsx");
+        } catch (error) {
+            console.error("Error generating other template:", error);
             await showAlert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการสร้าง Template");
         } finally {
             setLoading(false);
@@ -711,8 +754,6 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 const scoreIndex = headerStr.findIndex(h => h.includes("Score") || h.includes("คะแนน"));
                 if (scoreIndex === -1) { await showAlert("ข้อมูลไม่ครบถ้วน", "ไม่พบคอลัมน์ 'Score' หรือ 'คะแนน'"); setLoading(false); return; }
 
-                const currentPeriod = getCurrentPeriod ? getCurrentPeriod() : `${selectedYear}-Annual`;
-
                 // Loop through each row in Excel and save (วนลูปบันทึกข้อมูลทีละแถว)
                 for (const row of tableRows) {
                     const empId = String(row[empIdIndex]).trim();
@@ -721,37 +762,19 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     if (userDocId) {
                         const rawScore = parseFloat(row[scoreIndex]);
                         if (!isNaN(rawScore)) {
-                            // Find Evaluation Doc (ค้นหาเอกสารการประเมินที่มีอยู่)
-                            const evalsQuery = query(
-                                collection(db, 'evaluations'),
-                                where('employeeDocId', '==', userDocId),
-                                where('period', '==', currentPeriod)
-                            );
-                            const evalSnaps = await getDocs(evalsQuery);
+                            // 🔥 Change Target: Save to yearlyStats instead of evaluations collection
+                            const statsRef = doc(db, 'users', userDocId, 'yearlyStats', selectedYear);
 
-                            let evalRef;
-                            if (evalSnaps.empty) {
-                                // Create new if not exists
-                                evalRef = doc(collection(db, 'evaluations'));
-                                batch.set(evalRef, {
-                                    employeeDocId: userDocId,
-                                    period: currentPeriod,
-                                    scores: { [selectedScoreItem]: rawScore },
-                                    createdAt: serverTimestamp(),
-                                    updatedAt: serverTimestamp()
-                                });
-                            } else {
-                                // Update existing
-                                evalRef = evalSnaps.docs[0].ref;
-                                // Update existing
-                                evalRef = evalSnaps.docs[0].ref;
-                                // Fix: Use FieldPath to handle special characters in score keys (แก้ไข: ใช้ FieldPath เพื่อรองรับตัวอักขระพิเศษใน Key ของคะแนน)
-                                batch.update(
-                                    evalRef,
-                                    new FieldPath('scores', selectedScoreItem), rawScore,
-                                    new FieldPath('updatedAt'), serverTimestamp()
-                                );
-                            }
+                            // Use selectedScoreItem (Question ID) as the key
+                            // This matches the logic in useEvaluation.ts which merges yearlyStats keys into scores
+                            batch.set(statsRef, {
+                                [selectedScoreItem]: rawScore,
+                                year: parseInt(selectedYear)
+                            }, { merge: true });
+
+                            // Optional: Update main doc if this score is critical for list view (e.g. Total Score)
+                            // But usually scores are detailed. We only sync main stats like Late/Absent.
+
                             updateCount++;
                         }
                     }
@@ -840,6 +863,47 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                         updateCount++;
                     }
                 });
+            } else if (fileType === 'other') {
+                // For 'other', we map dynamic columns (except ID/Name) to yearlyStats keys
+                const header = tableRows.length > 0 ? tableHeaders : [];
+
+                tableRows.forEach(row => {
+                    const empId = String(row[empIdIndex]).trim();
+                    const userDocId = employeeMap.get(empId);
+
+                    if (userDocId) {
+                        const scoreData: any = {};
+
+                        header.forEach((colName, idx) => {
+                            const key = String(colName).trim();
+                            // Skip metadata columns
+                            if (key !== 'รหัสพนักงาน' && key !== 'ลำดับ' && key !== 'ชื่อ-นามสกุล' && key !== 'EmployeeID' && key !== 'Name') {
+                                const val = row[idx];
+                                if (val !== undefined && val !== null && val !== "") {
+                                    const numVal = parseFloat(val);
+                                    if (!isNaN(numVal)) {
+                                        // Auto-map AI Score or cleanup key
+                                        if (key.toLowerCase().includes('ai') && key.toLowerCase().includes('score')) {
+                                            scoreData['aiScore'] = numVal;
+                                        } else {
+                                            const safeKey = key.replace(/[ .]/g, '_');
+                                            scoreData[safeKey] = numVal;
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        if (Object.keys(scoreData).length > 0) {
+                            const statsRef = doc(db, 'users', userDocId, 'yearlyStats', selectedYear);
+                            batch.set(statsRef, {
+                                ...scoreData,
+                                year: parseInt(selectedYear)
+                            }, { merge: true });
+                            updateCount++;
+                        }
+                    }
+                });
             }
 
             if (updateCount > 0) {
@@ -898,7 +962,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                     <option value="attendance">1. ขาด/ลา/มาสาย (DB_ขาดสาย)</option>
                                     <option value="leave">2. สิทธิ์การลาคงเหลือ (DB_การลา)</option>
                                     <option value="warning">3. ใบเตือน/ความผิด (DB_ใบเตือน)</option>
-                                    <option value="score">4. คะแนนประเมินรายหัวข้อ (Evaluation Score)</option>
+                                    <option value="score">4. คะแนนประเมิน / คะแนนอื่นๆ (Evaluation / Other Scores)</option>
                                 </select>
                             </div>
 

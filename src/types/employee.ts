@@ -15,4 +15,5 @@ export interface Employee {
   evaluatorId?: string;
   evaluatorName?: string;
   pdNumber?: string;
+  isEvaluator?: boolean; // Added for UI logic
 }
