@@ -538,7 +538,7 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
         setSelectedEmployee(emp);
         setSelectedEmployeeId(empId);
 
-        let currentLoadedScores = {};
+        let currentLoadedScores: Record<string, number> = {};
 
         if (prevEval) {
             currentLoadedScores = prevEval.scores;
