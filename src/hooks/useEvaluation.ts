@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { create, all } from 'mathjs';
+import { calculateScores, mergeStatsScores } from '../utils/score-engine';
 import { collection, getDocs, addDoc, query, where, Timestamp, doc, setDoc, getDoc, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { HO_SECTIONS } from '../data/evaluation-criteria';
@@ -222,126 +223,18 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
         // Use passed emp or fallback to selectedEmployee
         const targetEmp = emp || selectedEmployee;
 
-        console.log("🧮 Starting Calculation", { stats, currentScores, empName: targetEmp?.firstName });
+        console.log("🧮 Starting Calculation (Engine)", { stats, currentScores, empName: targetEmp?.firstName });
 
-        try {
-            const math = create(all);
-            const context: any = {};
-            // Ensure all stats are numbers
-            if (stats) {
-                Object.keys(stats).forEach(key => {
-                    const val = (stats as any)[key];
-                    context[key] = isNaN(Number(val)) ? val : Number(val);
-                });
-            }
+        const result = calculateScores(
+            stats,
+            currentScores,
+            scoringRules,
+            categories,
+            targetEmp
+        );
 
-            Object.entries(currentScores).forEach(([key, value]) => {
-                const safeKey = key.replace('-', '_');
-                context[safeKey] = value;
-                // Add sanitized version for bracketed IDs (e.g. [O]-1 -> O_1)
-                const strippedKey = key.replace(/[\[\]]/g, '').replace('-', '_');
-                if (strippedKey !== safeKey) {
-                    context[strippedKey] = value;
-                }
-            });
-
-            // 🔥 Inject Employee Context
-            if (targetEmp) {
-                context['Level'] = targetEmp.level;
-                context['Section'] = targetEmp.section;
-                context['Department'] = targetEmp.department;
-                context['isHO'] = HO_SECTIONS.includes(targetEmp.section);
-                context['isMonthly'] = targetEmp.level === 'Monthly Staff';
-                context['isSupervisor'] = targetEmp.level === 'Supervisor';
-            }
-
-            categories.forEach(cat => {
-                cat.questions.forEach(q => {
-                    const safeKey = q.id.replace('-', '_');
-                    if (!(safeKey in context)) {
-                        context[safeKey] = 0;
-                    }
-                    // Sanitized fallback
-                    const strippedKey = q.id.replace(/[\[\]]/g, '').replace('-', '_');
-                    if (!(strippedKey in context)) {
-                        context[strippedKey] = 0;
-                    }
-                });
-            });
-
-            const sortedRules = [...scoringRules].sort((a, b) => b.name.length - a.name.length);
-            const variables = sortedRules.filter(r => r.type === 'VARIABLE');
-            const finalScores = sortedRules.filter(r => r.type === 'SCORE');
-
-            let calculatedDisciplineScore: number | string = "-";
-            let foundNamedDisciplineScore = false;
-
-            // 🔥 Multi-pass calculation
-            for (let pass = 0; pass < 5; pass++) {
-                variables.forEach(v => {
-                    try {
-                        let cleanFormula = v.formula;
-                        variables.forEach(subV => {
-                            const pattern = `[${subV.name}]`;
-                            const val = context[`VAR_${subV.name} `] || context[subV.name] || 0;
-                            cleanFormula = cleanFormula.split(pattern).join(`(${val})`);
-                        });
-                        cleanFormula = cleanFormula.replace(/[\[\]]/g, '');
-                        const result = math.evaluate(cleanFormula, context);
-                        context[`VAR_${v.name} `] = result;
-                        context[v.name] = result;
-
-                        if (v.name === 'DISCIPLINE_SCORE' || v.name === 'Discipline_Score' || v.name === 'รวมคะแนนขาดลามาสาย') {
-                            calculatedDisciplineScore = Math.round(result * 100) / 100;
-                            foundNamedDisciplineScore = true;
-                        }
-                    } catch (e) {
-                        context[`VAR_${v.name} `] = 0;
-                        context[v.name] = 0;
-                    }
-                });
-            }
-
-            finalScores.forEach(s => {
-                try {
-                    let scoreFormula = s.formula;
-                    variables.forEach(v => {
-                        const pattern = `[${v.name}]`;
-                        const val = context[`VAR_${v.name} `] || 0;
-                        scoreFormula = scoreFormula.split(pattern).join(`(${val})`);
-                    });
-
-                    finalScores.forEach(otherS => {
-                        if (otherS.id !== s.id) {
-                            const pattern = `[${otherS.name}]`;
-                            const val = context[`VAR_${otherS.name} `] || 0;
-                            scoreFormula = scoreFormula.split(pattern).join(`(${val})`);
-                        }
-                    });
-
-                    scoreFormula = scoreFormula.replace(/[\[\]]/g, '');
-                    const result = math.evaluate(scoreFormula, context);
-                    context[`VAR_${s.name}`] = result;
-
-                    if (s.name === 'DISCIPLINE_SCORE' || s.name === 'Discipline_Score') {
-                        calculatedDisciplineScore = Math.round(result * 100) / 100;
-                        foundNamedDisciplineScore = true;
-                    }
-                    else if (s.targetField === 'disciplineScore' && !foundNamedDisciplineScore) {
-                        calculatedDisciplineScore = Math.round(result * 100) / 100;
-                    }
-                } catch (e) { }
-            });
-
-            setDisciplineScore(calculatedDisciplineScore);
-
-            const calculatedTotal = context['VAR_TOTAL_SCORE'] || context['VAR_Total_Score'] || 0;
-            const finalTotal = typeof calculatedTotal === 'number' ? calculatedTotal : 0;
-            setTotalScore(Number(finalTotal.toFixed(2)));
-
-        } catch (err) {
-            setDisciplineScore("Error");
-        }
+        setDisciplineScore(result.disciplineScore);
+        setTotalScore(result.totalScore);
     };
 
     const handleSectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -420,47 +313,16 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                 } as any;
             }
 
-            // 🔥 Merge scores from yearlyStats (e.g. AI Score, imported data)
-            // This ensures imported scores appear immediately even if not yet saved to 'evaluations'
-            const mergedScores = { ...currentLoadedScores };
-
-            // 1. Explicit mapping for AI Score (if exists in stats)
-            if ((statsData as any).aiScore !== undefined) {
-                // Check if there is a corresponding question for AI Score (usually 'aiScore' or 'AI-Score')
-                // We simply check if any question ID matches 'aiScore' or we force it if legacy support needed
-                // But better to just merge generic keys:
-            }
-
-            // 2. Generic Merge: Check ALL Questions. If yearStat has matching key, use it (if not already evaluated)
-            categories.forEach(cat => {
-                cat.questions.forEach(q => {
-                    if (q.isReadOnly) {
-                        // Priorities:
-                        // 1. Existing Evaluation Score (already in currentLoadedScores)
-                        // 2. Yearly Stats (Imported Data)
-                        // 3. Default 0/null
-
-                        if (mergedScores[q.id] === undefined) {
-                            const cleanKey = q.id.replace(/[ -]/g, '_'); // Matches ImportPage logic
-                            // Try exact ID, then cleaned ID, then 'aiScore' special case
-                            let val = (statsData as any)[q.id] ?? (statsData as any)[cleanKey];
-
-                            // Special Case for AI Score which might vary in naming
-                            if (val === undefined && (q.title.includes('AI') || q.id.toLowerCase().includes('ai'))) {
-                                val = (statsData as any)['aiScore'];
-                            }
-
-                            if (val !== undefined) {
-                                mergedScores[q.id] = val;
-                            }
-                        }
-                    }
-                });
-            });
+            // 🔥 Merge scores from yearlyStats (Handles 0 vs O match automatically)
+            const mergedScores = mergeStatsScores(statsData, currentLoadedScores, categories);
 
             setEmployeeStats(statsData);
             setScores(mergedScores); // Update state
-            runDisciplineCalculation(statsData, mergedScores, emp);
+
+            // Calculate using shared engine
+            const result = calculateScores(statsData, mergedScores, scoringRules, categories, emp);
+            setDisciplineScore(result.disciplineScore);
+            setTotalScore(result.totalScore);
         } catch (err) {
             console.error("Error fetching stats:", err);
         }
@@ -552,7 +414,15 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                 level: selectedEmployee.level,
                 evaluator: session?.user?.name || "Admin",
                 scores: scores,
-                aiScore: 0,
+                // 🔥 Self-Healing: If aiScore is 0, try to find it in the scores map (Legacy Keys: [0]-1, [O]-1, etc.)
+                aiScore: (() => {
+                    const currentAi = existingEvaluations[selectedEmployee.id]?.aiScore || employeeStats?.aiScore || 0;
+                    if (currentAi > 0) return currentAi;
+
+                    // Fallback: Check hidden keys in scores
+                    const hiddenScore = scores['[0]-1'] || scores['[O]-1'] || scores['O-1'] || scores['0-1'] || 0;
+                    return hiddenScore > 0 ? hiddenScore : 0;
+                })(),
                 disciplineScore: disciplineScore,
                 totalScore: Number(totalScore.toFixed(2)),
                 updatedAt: Timestamp.now(),

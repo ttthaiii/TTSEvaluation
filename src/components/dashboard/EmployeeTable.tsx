@@ -17,6 +17,27 @@ interface EmployeeTableProps {
 export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories = [], onRowClick, onEvaluate, compareYears = [] }) => {
     const router = useRouter(); // 🔥 Initialize Router
 
+    // 🔥 Safety Helper to find AI Score
+    const getAiScore = (item: DashboardItem) => {
+        // 1. Check direct AI Score on Item (from Users collection - Import Fix)
+        if (item.aiScore) return item.aiScore;
+
+        const evalData = item.evaluation;
+        // 2. Check Evaluation Object
+        if (evalData) {
+            // 2a. Direct Property
+            if (evalData.aiScore && evalData.aiScore !== 0) return evalData.aiScore;
+
+            // 2b. Check inside Scores object for legacy keys like [O]-1 or [0]-1
+            const scores = evalData.scores || {};
+            // Try various permutations found in DB
+            const val = scores['[O]-1'] || scores['[0]-1'] || scores['O-1'] || scores['0-1'];
+            if (val) return val;
+        }
+
+        return 0;
+    };
+
     const getCategoryPercentage = (item: DashboardItem, catId: string) => {
         const scores = item.evaluation?.scores || {};
         let rawSum = 0;
@@ -107,7 +128,7 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                                     </div>
                                     <div className="bg-slate-50 p-2 rounded-lg">
                                         <p className="text-slate-400 uppercase font-bold">AI Score</p>
-                                        <p className="text-sm font-black text-indigo-600">{isWaiting ? '-' : (item.evaluation?.aiScore || 0)}</p>
+                                        <p className="text-sm font-black text-indigo-600">{isWaiting ? '-' : getAiScore(item) || 0}</p>
                                     </div>
                                 </div>
 
@@ -251,7 +272,7 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                                             {isWaiting ? '-' : (item.level === 'Monthly Staff' ? '0%' : `${getCategoryPercentage(item, 'C')}%`)}
                                         </td>
                                         <td className="px-6 py-4 text-center text-indigo-600 font-semibold">
-                                            {isWaiting ? '-' : (item.evaluation?.aiScore || 0)}
+                                            {isWaiting ? '-' : getAiScore(item) || 0}
                                         </td>
                                     </tr>
                                 );
@@ -260,6 +281,6 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                     </tbody>
                 </table>
             </div>
-        </div>
+        </div >
     );
 };

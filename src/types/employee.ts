@@ -18,4 +18,5 @@ export interface Employee {
   isEvaluator?: boolean; // Added for UI logic
   birthDate?: string | Timestamp | null; // Added field
   age?: number; // Added field
+  aiScore?: number; // 🔥 Added for Dashboard fallback
 }

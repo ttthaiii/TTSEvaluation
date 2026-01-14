@@ -72,6 +72,7 @@ export const EvaluationProvider = ({ children }: { children: ReactNode }) => {
                     pdNumber: d.pdNumber || "",
                     birthDate: d.birthDate || null,
                     age: d.age || 0,
+                    aiScore: d.aiScore, // 🔥 Map AI Score for Dashboard Fallback
                 } as Employee);
             });
 

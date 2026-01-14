@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useModal } from '../../context/ModalContext'; // 🔥
+import { calculateScores } from '../../utils/score-engine';
+import { getGrade } from '../../utils/grade-calculation';
 
 interface EmployeeEditModalProps {
     isOpen: boolean;
@@ -78,19 +80,29 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
 
             if (statsSnap.exists()) {
                 const data = statsSnap.data();
+
+                // [Speckit T-Sync] Unify AI Score keys
+                // User reports [O]-1 holds the correct value (e.g. 5).
+                // We must prioritize these legacy keys over standard 'aiScore' if present.
+                const legacyAiScore = data['[O]-1'] || data['[0]-1'] || data['O-1'] || 0;
+                const finalAiScore = legacyAiScore || data.aiScore || 0;
+
                 setStats({
                     totalLateMinutes: data.totalLateMinutes || 0,
                     totalSickLeaveDays: data.totalSickLeaveDays || 0,
                     totalAbsentDays: data.totalAbsentDays || 0,
                     warningCount: data.warningCount || 0,
-                    aiScore: data.aiScore || 0
+                    aiScore: finalAiScore // Use unified score
                 });
 
                 // Extract Dynamic Scores
+                // Filter out standard keys AND known AI Score aliases to avoid duplicate inputs
                 const standardKeys = ['totalLateMinutes', 'totalSickLeaveDays', 'totalAbsentDays', 'warningCount', 'aiScore', 'year'];
+                const aiAliases = ['[O]-1', '[0]-1', 'O-1', '0-1'];
                 const extraScores: Record<string, number> = {};
+
                 Object.keys(data).forEach(key => {
-                    if (!standardKeys.includes(key)) {
+                    if (!standardKeys.includes(key) && !aiAliases.includes(key)) {
                         extraScores[key] = data[key];
                     }
                 });
@@ -166,9 +178,12 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
         });
     };
 
+    // 🔥 Imports for Auto-Recalculation REMOVED (Moved to top)
+
     const handleSaveStats = async () => {
         setLoading(true);
         try {
+            // Sanitize Data before Saving (Ensure numbers)
             // Sanitize Data before Saving (Ensure numbers)
             const sanitizedStats = {
                 totalLateMinutes: Number(stats.totalLateMinutes) || 0,
@@ -176,6 +191,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                 totalAbsentDays: Number(stats.totalAbsentDays) || 0,
                 warningCount: Number(stats.warningCount) || 0,
                 aiScore: Number(stats.aiScore) || 0,
+                // '[O]-1': Number(stats.aiScore) || 0, // ❌ Error: Firestore keys cannot contain '[' or ']' 
             };
 
             const sanitizedDynamic: Record<string, number> = {};
@@ -183,19 +199,101 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                 sanitizedDynamic[k] = Number(dynamicScores[k]) || 0;
             });
 
+            // [Speckit Cleanup] Standardize on 'aiScore' ONLY.
+            // We do NOT save 'O-1' or '[O]-1' to yearlyStats anymore to strictly follow the "One Variable" rule.
+
             // 1. Update Subcollection
             const statsRef = doc(db, 'users', employeeId, 'yearlyStats', String(currentYear));
             // Check existence to decide set(merge) vs update? set with merge is safest
-            await import('firebase/firestore').then(mod => {
-                mod.setDoc(statsRef, { ...sanitizedStats, ...sanitizedDynamic, year: currentYear }, { merge: true });
-            });
+            const { setDoc, collection, getDocs, query, where, orderBy } = await import('firebase/firestore');
+            await setDoc(statsRef, { ...sanitizedStats, ...sanitizedDynamic, year: currentYear }, { merge: true });
 
             // 2. Update Main Doc (Always update main doc to reflect the current evaluation/stats in the list)
-            // Note: We might NOT want to spam main doc with all dynamic scores, but standard stats yes.
             const mainRef = doc(db, 'users', employeeId);
             await updateDoc(mainRef, sanitizedStats);
 
-            await showAlert("สำเร็จ", "✅ บันทึกข้อมูลสถิติเรียบร้อย");
+            // 🔥 3. Auto-Recalculate Existing Evaluation (if exists)
+            // This ensures the "Evaluation" reflects the new stats immediately
+            const evalPeriod = `${currentYear}-Annual`;
+            const evalsRef = collection(db, 'evaluations');
+            const qEval = query(
+                evalsRef,
+                where('employeeDocId', '==', employeeId),
+                where('period', '==', evalPeriod)
+            );
+            const evalSnap = await getDocs(qEval);
+
+            if (!evalSnap.empty) {
+                const evalDoc = evalSnap.docs[0];
+                const evalData = evalDoc.data();
+                const evalScores = evalData.scores || {};
+
+                // We need Categories and Rules for Calculation
+                // A. Fetch Categories
+                const catsRef = collection(db, 'evaluation_categories');
+                const catsSnap = await getDocs(query(catsRef, orderBy('order', 'asc')));
+                const categories: any[] = catsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                // B. Fetch Scoring Formulas (Rules)
+                const formulasRef = collection(db, 'scoring_formulas');
+                const formulasSnap = await getDocs(formulasRef);
+                const scoringRules: any[] = formulasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                // C. Fetch Grade Criteria (needed for getGrade)
+                const rulesRef = collection(db, 'config_grading_rules');
+                const rulesSnap = await getDocs(query(rulesRef, orderBy('min', 'desc')));
+                const gradeCriteria: any[] = rulesSnap.docs.map(d => d.data());
+
+                const fullStats = { ...sanitizedStats, ...sanitizedDynamic, year: currentYear };
+
+                // Fetch Employee Data for Context
+                const empSnap = await getDoc(mainRef);
+                const empData = empSnap.data() as any;
+
+                // 🔥 SYNC AI SCORE TO EVALUATION SCORES
+                // The formula likely uses [O]-1 or similar keys. We must update them.
+                const newAiScore = sanitizedStats.aiScore;
+                if (newAiScore !== undefined) {
+                    // List of possible keys for AI Score
+                    const aiKeys = ['[0]-1', '[O]-1', 'O-1', '0-1', 'aiScore'];
+                    aiKeys.forEach(key => {
+                        // Update if key exists OR if it's the standard O-1 key even if missing
+                        // Actually, we should force update [O]-1 if we know that's the one.
+                        // But let's be safe and update any that are found, plus ensure [O]-1 is set if it's the standard.
+                        // Given user feedback "[O]-1 = 5", let's ensure [O]-1 matches aiScore.
+                        if (key === '[O]-1' || key in evalScores) {
+                            evalScores[key] = newAiScore;
+                        }
+                    });
+                    // Force set [O]-1 just in case it wasn't there (Standard Key)
+                    evalScores['[O]-1'] = newAiScore;
+                }
+
+                // Calculate
+                const { disciplineScore, totalScore } = calculateScores(
+                    fullStats as any,
+                    evalScores,
+                    scoringRules,
+                    categories,
+                    empData
+                );
+
+                // Determine Grade
+                const numTotal = Number(totalScore);
+                const newGrade = getGrade(numTotal, gradeCriteria);
+
+                // Update Evaluation Doc
+                await updateDoc(doc(db, 'evaluations', evalDoc.id), {
+                    scores: evalScores, // 🔥 Save the updated scores map too!
+                    disciplineScore,
+                    totalScore: numTotal,
+                    grade: newGrade,
+                    aiScore: sanitizedStats.aiScore, // Sync AI Score root field
+                    updatedAt: serverTimestamp()
+                });
+            }
+
+            await showAlert("สำเร็จ", "✅ บันทึกข้อมูลและคำนวณคะแนนใหม่เรียบร้อย");
             onSaveSuccess();
         } catch (error) {
             console.error("Error saving stats:", error);
@@ -368,10 +466,10 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                                                     );
                                                 })}
 
-                                                {/* If stats.aiScore exists and isn't covered in dynamicScores (it shouldn't be), consider showing it if > 0 */}
-                                                {Number(stats.aiScore) > 0 && !dynamicScores['aiScore'] && (
+                                                {/* Always show AI Score (Manual) since we filtered loops */}
+                                                {!dynamicScores['aiScore'] && (
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">AI Score (Manual)</label>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">AI Score ([O]-1)</label>
                                                         <input
                                                             type="number" step="0.1"
                                                             value={stats.aiScore}

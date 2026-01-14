@@ -427,10 +427,7 @@ export default function EmployeeListPage() {
                 />
 
                 {/* Search (Dependent on Section) */}
-                {/* [Debug] Log options immediately before rendering */}
-                {console.log("[Page] Rendering Employee SearchableSelect. Options[0]:", employeeSelectOptions[1])}
-                {/* Search (Dependent on Section) */}
-                {console.log("[Page] Rendering Employee SearchableSelect. Options[0]:", employeeSelectOptions ? employeeSelectOptions[1] : "N/A")}
+
                 <SearchableSelect
                     label="ค้นหาพนักงาน"
                     placeholder="ค้นหาชื่อ หรือ รหัส..."
@@ -958,6 +955,17 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 if (data.employeeId) employeeMap.set(String(data.employeeId), doc.id);
             });
 
+            // 🔥 [URGENT FIX] Pre-fetch EXISTING evaluations to ensure we update the CORRECT document
+            // This prevents creating duplicate "ghost" documents if the ID pattern doesn't match
+            const currentPeriod = `${selectedYear}-Annual`;
+            const qEvals = query(collection(db, 'evaluations'), where('period', '==', currentPeriod));
+            const evalsSnapshot = await getDocs(qEvals);
+            const evalMap = new Map<string, string>(); // employeeDocId -> evaluationDocId
+            evalsSnapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.employeeDocId) evalMap.set(d.employeeDocId, doc.id);
+            });
+
             const batch = writeBatch(db);
             let updateCount = 0;
             const headerStr = tableHeaders.map(h => String(h).trim());
@@ -1183,15 +1191,39 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                             // 🔥 Change Target: Save to yearlyStats instead of evaluations collection
                             const statsRef = doc(db, 'users', userDocId, 'yearlyStats', selectedYear);
 
-                            // Use selectedScoreItem (Question ID) as the key
-                            // This matches the logic in useEvaluation.ts which merges yearlyStats keys into scores
-                            batch.set(statsRef, {
-                                [selectedScoreItem]: rawScore,
-                                year: parseInt(selectedYear)
-                            }, { merge: true });
+                            // [Speckit T-Sync] Remap Legacy Keys to 'aiScore'
+                            let targetKey = selectedScoreItem;
+                            const aiAliases = ['[O]-1', '[0]-1', 'O-1', '0-1'];
+                            if (aiAliases.includes(targetKey)) {
+                                targetKey = 'aiScore';
+                            }
 
-                            // Optional: Update main doc if this score is critical for list view (e.g. Total Score)
-                            // But usually scores are detailed. We only sync main stats like Late/Absent.
+                            // Use mapped key
+                            const updateData = {
+                                [targetKey]: rawScore,
+                                year: parseInt(selectedYear)
+                            };
+
+                            batch.set(statsRef, updateData, { merge: true });
+
+                            // If it's AI Score, Sync to Root User Doc & Evaluation for Dashboard
+                            if (targetKey === 'aiScore') {
+                                // 1. User Doc
+                                batch.set(doc(db, 'users', userDocId), { aiScore: rawScore }, { merge: true });
+
+                                // 2. Evaluation Doc (Robust Sync)
+                                let targetEvalId = evalMap.get(userDocId);
+                                if (!targetEvalId) targetEvalId = `${userDocId}_${selectedYear}`;
+
+                                const evalRef = doc(db, 'evaluations', targetEvalId);
+                                batch.set(evalRef, {
+                                    aiScore: rawScore,
+                                    employeeDocId: userDocId,
+                                    period: currentPeriod,
+                                    evaluationYear: parseInt(selectedYear),
+                                    updatedAt: serverTimestamp()
+                                }, { merge: true });
+                            }
 
                             updateCount++;
                         }
@@ -1301,8 +1333,15 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                     const numVal = parseFloat(val);
                                     if (!isNaN(numVal)) {
                                         // Auto-map AI Score or cleanup key
-                                        if (key.toLowerCase().includes('ai') && key.toLowerCase().includes('score')) {
+                                        const lowerKey = key.toLowerCase();
+                                        // 🔥 Match "AI Score" OR legacy keys like "[0]-1", "[O]-1", "O-1" (found in DB)
+                                        if (lowerKey.includes('ai') && lowerKey.includes('score') ||
+                                            key === '[0]-1' || key === '[O]-1' || key === 'O-1' || key === '0-1') {
+
+                                            // [Speckit T-Sync] Standardize on 'aiScore' ONLY.
+                                            // Do NOT save the original key (safeKey) to prevent duplications like [O]-1 in DB.
                                             scoreData['aiScore'] = numVal;
+
                                         } else {
                                             const safeKey = key.replace(/[ .]/g, '_');
                                             scoreData[safeKey] = numVal;
@@ -1318,6 +1357,35 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                 ...scoreData,
                                 year: parseInt(selectedYear)
                             }, { merge: true });
+
+
+                            // 🔥 Sync AI Score to Root User Doc for Dashboard Visibility
+                            if (scoreData['aiScore'] !== undefined) {
+                                // 1. Update User Doc
+                                batch.set(doc(db, 'users', userDocId), {
+                                    aiScore: scoreData['aiScore']
+                                }, { merge: true });
+
+
+                                // 2. 🔥 Update Existing Evaluation (ROBUST)
+                                // Only update if we can find the correct document or create a valid one
+                                let targetEvalId = evalMap.get(userDocId);
+                                if (!targetEvalId) {
+                                    targetEvalId = `${userDocId}_${selectedYear}`; // Fallback ID
+                                }
+
+                                const evalRef = doc(db, 'evaluations', targetEvalId);
+
+                                batch.set(evalRef, {
+                                    aiScore: scoreData['aiScore'],
+                                    // Ensure these fields exist so it is queryable if undefined
+                                    employeeDocId: userDocId,
+                                    period: currentPeriod,
+                                    evaluationYear: parseInt(selectedYear),
+                                    updatedAt: serverTimestamp()
+                                }, { merge: true });
+                            }
+
                             updateCount++;
                         }
                     }

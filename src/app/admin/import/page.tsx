@@ -6,6 +6,10 @@ import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/fir
 import { db } from '@/lib/firebase';
 import { useModal } from '../../../context/ModalContext';
 import { LateAbsentRow, LeaveRow, WarningRow, OtherScoreRow } from '@/types/import-data';
+import { calculateScores, mergeStatsScores } from '@/utils/score-engine';
+import { EmployeeStats, ScoringRule, Category } from '@/types/evaluation';
+import { Employee } from '@/types/employee';
+import { Timestamp } from 'firebase/firestore';
 
 export default function ImportPage() {
   const { showAlert } = useModal();
@@ -41,6 +45,26 @@ export default function ImportPage() {
     });
 
     console.log(`Found ${empMap.size} users in DB`);
+
+    // 🔥 1.1 Fetch Calculation Context (Rules & Categories)
+    let rules: ScoringRule[] = [];
+    let categories: Category[] = [];
+    try {
+      const rulesSnap = await getDocs(collection(db, 'scoring_rules'));
+      rules = rulesSnap.docs.map(d => ({ id: d.id, ...d.data() } as ScoringRule));
+      const catsSnap = await getDocs(collection(db, 'evaluation_categories'));
+      categories = catsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Category));
+    } catch (e) {
+      console.error("Failed to load calculation context", e);
+    }
+
+    // 🔥 1.2 Fetch Existing Evaluations to preserve Manual Scores
+    const evalMap = new Map<string, any>(); // employeeId -> evalData
+    const evalSnap = await getDocs(collection(db, 'evaluations'));
+    evalSnap.forEach(d => {
+      const val = d.data();
+      if (val.employeeDocId) evalMap.set(val.employeeDocId, { id: d.id, ...val });
+    });
 
     // 2. Prepare Data for Batch Update
     const updates = new Map<string, any>(); // docId -> { data to merge }
@@ -140,6 +164,99 @@ export default function ImportPage() {
 
         // Update main user doc as well (as cache)
         batch.update(mainRef, data);
+
+        // 🔥 3.1 Auto-Calculate & Update Evaluations (Dashboard Data)
+        try {
+          const existingEval = evalMap.get(uid);
+          const currentScores = existingEval?.scores || {};
+
+          // Merge stats into scores using helper
+          const mergedScores = mergeStatsScores(data as EmployeeStats, currentScores, categories);
+
+          // 🔥 Smart Resolve AI Score (Prioritize Mapped Question)
+          let finalAiScore = 0;
+          let foundAiScore = false;
+
+          // 1. Try to find the AI Question and pull from Merged Scores (Best Match)
+          const aiQuestion = categories.flatMap(c => c.questions).find(q =>
+            q.title.toLowerCase().includes('ai') || q.id.toLowerCase().includes('ai')
+          );
+          if (aiQuestion && typeof mergedScores[aiQuestion.id] === 'number') {
+            finalAiScore = mergedScores[aiQuestion.id];
+            foundAiScore = true;
+          }
+
+          // 2. If not found via Question, try explicit Column ('aiScore') in raw data
+          // Only if we haven't found a valid score yet (or if raw data has a better score? usually mapped is better)
+          if (!foundAiScore) {
+            const rawAi = (data as any)['aiScore'];
+            if (rawAi !== undefined) {
+              finalAiScore = rawAi;
+              foundAiScore = true;
+            }
+          }
+
+          // 3. Fallback to existing Eval data if still 0/not found? 
+          // If import didn't provide it, we should maybe keep old?
+          // But if we foundAiScore=false, final is 0.
+          if (!foundAiScore && existingEval?.aiScore) {
+            finalAiScore = existingEval.aiScore;
+          }
+
+          // Mock Employee Object for Calc Context (Minimal)
+          // We need level/section/department which are in users collection (userSnap)
+          // But we didn't save userSnap details to a map, only ID.
+          // Let's rely on standard logic or try to find user from userSnap if possible.
+          // Optimization: We iterate userSnap raw docs?
+          // Re-finding user data:
+          const userDoc = userSnap.docs.find(d => d.id === uid);
+          const userData = userDoc?.data() as Employee;
+
+          if (userData) {
+            const result = calculateScores(
+              { ...data, year: currentYear } as EmployeeStats,
+              mergedScores,
+              rules,
+              categories,
+              userData
+            );
+
+            if (existingEval) {
+              const evalRef = doc(db, 'evaluations', existingEval.id);
+              batch.update(evalRef, {
+                disciplineScore: result.disciplineScore,
+                totalScore: result.totalScore,
+                scores: mergedScores,
+                aiScore: finalAiScore,
+                updatedAt: Timestamp.now()
+              });
+            } else {
+              // Create New Evaluation if not exists?
+              // Maybe safer to only update if exists. To avoid creating ghost evals.
+              // But if it's imported, usually we want to see it.
+              // Let's create new if missing but simplistic:
+              const newEvalRef = doc(collection(db, 'evaluations'));
+              batch.set(newEvalRef, {
+                employeeId: userData.employeeId,
+                employeeDocId: uid,
+                employeeName: `${userData.firstName} ${userData.lastName}`,
+                department: userData.department,
+                section: userData.section,
+                level: userData.level,
+                scores: mergedScores,
+                disciplineScore: result.disciplineScore,
+                totalScore: result.totalScore,
+                aiScore: finalAiScore,
+                status: 'Draft', // Default to Draft
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+                evaluationYear: currentYear
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`Calc Error for ${uid}`, err);
+        }
       });
 
       await batch.commit();

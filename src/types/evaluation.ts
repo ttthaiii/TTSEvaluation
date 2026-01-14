@@ -34,3 +34,13 @@ export interface EvaluationRecord {
     status?: 'Draft' | 'Completed'; // สถานะการประเมิน: Draft (ร่าง) หรือ Completed (เสร็จสมบูรณ์)
     finalGrade?: string; // เกรดสรุปผล
 }
+
+export interface EmployeeStats {
+    totalLateMinutes: number;
+    totalSickLeaveDays: number;
+    totalAbsentDays: number;
+    warningCount: number;
+    aiScore?: number;
+    year: number;
+    [key: string]: number | undefined; // Allow dynamic keys
+}
