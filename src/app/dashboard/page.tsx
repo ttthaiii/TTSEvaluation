@@ -236,22 +236,38 @@ export default function DashboardPage() {
     };
 
     const handleRowClick = (empId: string) => {
-        // If row clicked, find the employee and set the search filter?
-        // Or actually, row click usually opens drawer?
-        // Wait, current code sets `selectedEmployeeId` (the filtering mechanism) on row click.
-        // This is weird behavior if row click is meant to select.
-        // Ah, `handleRowClick` was toggling highlighting.
-        // But user wants "Split Screen".
-        // The instructions for "Split Screen" (Task Id 1) say: "Clicking ... triggers ... split-screen panel".
-        // My code below `handleRowClick` implementation: `setSelectedEmployeeId(...)`.
-        // AND `onEvaluate={handleEvaluate}`.
-        // Let's verify who calls what. 
-        // EmployeeTable usually has `onRowClick` (for highlighting?) and `onEvaluate` (button?).
-        // If Row Click should open Drawer, `handleRowClick` should call `setEvaluationPanelId`.
-        // I will fix this logic if needed, but for now I'm focused on Filters.
-        // I will keep `handleRowClick` as is for now to avoid scope creep, unless it conflicts.
         setSelectedEmployeeId(prev => prev === empId ? '' : empId);
     };
+
+    // [T-History] Compute Comparison Distribution (Top-Level Hook)
+    const comparisonDistribution = useMemo(() => {
+        if (!isCompareMode || !historicalData) return undefined;
+
+        // Aggregate counts per Year per Grade
+        const distribution: Record<string, Record<string, number>> = {};
+
+        selectedYears.forEach(year => {
+            distribution[year] = { 'NI': 0, 'BE': 0, 'ME': 0, 'OE': 0, 'E': 0 };
+        });
+
+        filteredData.forEach(item => {
+            const empHistory = historicalData.get(item.id);
+            if (empHistory) {
+                selectedYears.forEach(yearStr => {
+                    const yearNum = parseInt(yearStr);
+                    const record = empHistory.get(yearNum);
+                    if (record && record.grade) {
+                        const g = record.grade;
+                        if (distribution[yearStr][g] !== undefined) {
+                            distribution[yearStr][g]++;
+                        }
+                    }
+                });
+            }
+        });
+
+        return distribution;
+    }, [filteredData, historicalData, isCompareMode, selectedYears]);
 
     if (loading) {
         return (
@@ -338,8 +354,16 @@ export default function DashboardPage() {
 
                         {/* Row 2: Distribution & Radar (Adjusted layout) */}
                         <div className="rounded-lg bg-white p-4 shadow lg:col-span-2">
-                            <h3 className="mb-4 text-lg font-semibold text-slate-700">แจกแจงการกระจายตัวผลการประเมิน</h3>
-                            <GradeDistributionChart data={filteredData} onGradeClick={handleGradeClick} />
+                            <h3 className="mb-4 text-lg font-semibold text-slate-700">
+                                {isCompareMode ? 'เปรียบเทียบการกระจายตัวผลการประเมิน' : 'แจกแจงการกระจายตัวผลการประเมิน'}
+                            </h3>
+                            <GradeDistributionChart
+                                data={filteredData}
+                                onGradeClick={handleGradeClick}
+                                // [T-History]
+                                isCompareMode={isCompareMode}
+                                comparisonData={comparisonDistribution}
+                            />
                         </div>
                         <div className="rounded-lg bg-white p-4 shadow lg:col-span-1">
                             <h3 className="mb-4 text-lg font-semibold text-slate-700">ผลการประเมินแยกตามหัวข้อ</h3>
