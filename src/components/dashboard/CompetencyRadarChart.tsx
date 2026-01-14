@@ -91,7 +91,7 @@ export const CompetencyRadarChart: React.FC<CompetencyRadarChartProps> = ({ data
                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
                     <PolarGrid />
                     <PolarAngleAxis dataKey="subject" />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                     <Radar
                         name="คะแนนเฉลี่ย (%)"
                         dataKey="A"

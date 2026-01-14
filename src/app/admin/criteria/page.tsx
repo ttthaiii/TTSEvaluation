@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, writeBatch, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { EVALUATION_CRITERIA } from '../../../data/evaluation-criteria';
 import { useModal } from '../../../context/ModalContext'; // 🔥
@@ -67,6 +67,38 @@ export default function CriteriaManagementPage() {
     }, []);
 
     // --- Actions ---
+
+    // [T-032] Eligibility Config
+    const [eligibilityConfig, setEligibilityConfig] = useState<{ minTenure: number, tenureUnit: 'years' | 'months' | 'days', cutoffDate: string }>({
+        minTenure: 0,
+        tenureUnit: 'years',
+        cutoffDate: '' // Default empty = End of Year
+    });
+
+    const loadEligibilityConfig = async () => {
+        try {
+            const docRef = doc(db, 'config_general', 'eligibility');
+            const snap = await getDoc(docRef);
+            if (snap.exists()) {
+                setEligibilityConfig(snap.data() as any);
+            }
+        } catch (e) {
+            console.error("Error loading eligibility config", e);
+        }
+    };
+
+    useEffect(() => {
+        loadEligibilityConfig();
+    }, []);
+
+    const saveEligibilityConfig = async () => {
+        try {
+            await setDoc(doc(db, 'config_general', 'eligibility'), eligibilityConfig);
+            await showAlert("สำเร็จ", "✅ บันทึกเกณฑ์อายุงานเรียบร้อย!");
+        } catch (e) {
+            await showAlert("ข้อผิดพลาด", String(e));
+        }
+    };
 
     // ฟังก์ชันโหลดข้อมูลจากไฟล์ Static ลง Database ครั้งแรก
     const loadDefaults = async () => {
@@ -194,6 +226,62 @@ export default function CriteriaManagementPage() {
                 <button onClick={loadDefaults} className="text-sm text-gray-500 underline hover:text-red-500">
                     ↺ รีเซ็ตค่าเริ่มต้น (Reset Default)
                 </button>
+            </div>
+
+            {/* [T-032] Eligibility Config Section */}
+            <div className="bg-white p-6 rounded-xl shadow-md mb-6 border-l-4 border-purple-500">
+                <div className="flex justify-between items-center mb-4">
+                    <div>
+                        <h2 className="text-xl font-bold text-[#4a148c]">📅 เกณฑ์คุณสมบัติผู้ได้รับการประเมิน (Eligibility)</h2>
+                        <p className="text-sm text-gray-500">กำหนดอายุงานขั้นต่ำของพนักงานที่จะถูกนำมาประเมินผล</p>
+                    </div>
+                    <button onClick={saveEligibilityConfig} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-purple-700 shadow">
+                        💾 บันทึกเกณฑ์
+                    </button>
+                </div>
+                <div className="flex flex-wrap gap-6 items-end">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">อายุงานขั้นต่ำ</label>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="number"
+                                min="0"
+                                value={eligibilityConfig.minTenure}
+                                onChange={(e) => setEligibilityConfig({ ...eligibilityConfig, minTenure: Number(e.target.value) })}
+                                className="border p-2 rounded w-24 text-center text-lg font-bold"
+                            />
+                            <select
+                                value={eligibilityConfig.tenureUnit}
+                                onChange={(e) => setEligibilityConfig({ ...eligibilityConfig, tenureUnit: e.target.value as any })}
+                                className="border p-2 rounded bg-gray-50"
+                            >
+                                <option value="years">ปี (Years)</option>
+                                <option value="months">เดือน (Months)</option>
+                                <option value="days">วัน (Days)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">
+                            นับถึงวันที่ (Cut-off Date)
+                        </label>
+                        <input
+                            type="date"
+                            value={eligibilityConfig.cutoffDate}
+                            onChange={(e) => setEligibilityConfig({ ...eligibilityConfig, cutoffDate: e.target.value })}
+                            className="border p-2 rounded w-full md:w-48 text-gray-700"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                            * หากไม่ระบุ จะใช้วันที่ 31 ธ.ค. ของปีประเมิน
+                        </p>
+                    </div>
+
+                    <div className="bg-purple-50 p-3 rounded text-sm text-purple-800 flex-1">
+                        💡 <b>ตัวอย่าง:</b> หากตั้งค่า <i>10 เดือน</i> และพนักงานเริ่มงานเมื่อ 1 ม.ค. 2025 (ครบ 10 เดือนใน 1 ต.ค.) <br />
+                        ระบบจะคำนวณอายุงานจากวันเริ่มงาน จนถึง <b>{eligibilityConfig.cutoffDate || '31 ธ.ค.'}</b>
+                    </div>
+                </div>
             </div>
 
             <div className="flex flex-col md:flex-row gap-6">

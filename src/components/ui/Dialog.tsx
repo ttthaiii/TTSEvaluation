@@ -17,7 +17,10 @@ export const Dialog: React.FC<DialogProps> = ({ isOpen, mode, title, message, on
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all animate-in zoom-in-95 duration-200 border border-slate-100">
+            <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all animate-in zoom-in-95 duration-200 border border-slate-100"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
                 <div className={`px-6 py-4 border-b ${mode === 'confirm' ? 'bg-orange-50 border-orange-100' : 'bg-slate-50 border-slate-100'}`}>
                     <h3 className={`text-lg font-bold ${mode === 'confirm' ? 'text-orange-600' : 'text-slate-800'}`}>
@@ -45,8 +48,8 @@ export const Dialog: React.FC<DialogProps> = ({ isOpen, mode, title, message, on
                     <button
                         onClick={onConfirm}
                         className={`px-6 py-2 rounded-lg text-white font-bold shadow-md transition-transform active:scale-95 ${mode === 'confirm'
-                                ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600'
-                                : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600'
+                            ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600'
+                            : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600'
                             }`}
                     >
                         {mode === 'confirm' ? 'ยืนยัน' : 'ตกลง'}

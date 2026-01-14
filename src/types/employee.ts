@@ -14,4 +14,5 @@ export interface Employee {
   isActive: boolean;
   evaluatorId?: string;
   evaluatorName?: string;
+  pdNumber?: string;
 }

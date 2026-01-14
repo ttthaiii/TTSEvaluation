@@ -3,19 +3,41 @@
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import { LogOut, User as UserIcon, LayoutDashboard, ClipboardList } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useModal } from '../context/ModalContext';
 
 export default function Navbar() {
     const { data: session } = useSession();
     const user = session?.user;
     const pathname = usePathname();
+    const router = useRouter();
+    const { navigationGuard } = useModal();
 
     const isActive = (path: string) => pathname === path || pathname?.startsWith(path + '/');
+
+    const handleNavigation = async (e: React.MouseEvent, href: string) => {
+        if (pathname === href) {
+            e.preventDefault();
+            return;
+        }
+
+        if (navigationGuard) {
+            e.preventDefault();
+            const canNavigate = await navigationGuard();
+            if (canNavigate) {
+                router.push(href);
+            }
+        }
+    };
 
     const NavItem = ({ href, icon: Icon, label, exact = false }: { href: string, icon: any, label: string, exact?: boolean }) => {
         const active = exact ? pathname === href : isActive(href);
         return (
-            <Link href={href} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${active ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:text-orange-600 hover:bg-slate-50'}`}>
+            <Link
+                href={href}
+                onClick={(e) => handleNavigation(e, href)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${active ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:text-orange-600 hover:bg-slate-50'}`}
+            >
                 <Icon className={`w-4 h-4 ${active ? 'text-orange-600' : 'text-slate-400 group-hover:text-orange-600'}`} />
                 <span>{label}</span>
             </Link>
@@ -28,7 +50,11 @@ export default function Navbar() {
                 {/* Logo area */}
                 <div className="flex items-center gap-6">
                     {/* 🔥 Fixed: Logo now links to /dashboard instead of / */}
-                    <Link href="/dashboard" className="flex items-center gap-2 group">
+                    <Link
+                        href="/dashboard"
+                        onClick={(e) => handleNavigation(e, '/dashboard')}
+                        className="flex items-center gap-2 group"
+                    >
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white shadow-md group-hover:shadow-orange-200 transition-all">
                             Ex
                         </div>
@@ -56,15 +82,27 @@ export default function Navbar() {
 
                                     <div className="absolute left-0 top-[90%] w-60 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left z-50">
                                         <div className="p-1">
-                                            <Link href="/employees" className="block px-3 py-2.5 rounded-lg hover:bg-orange-50 text-slate-700 hover:text-orange-800 transition-colors">
+                                            <Link
+                                                href="/employees"
+                                                onClick={(e) => handleNavigation(e, '/employees')}
+                                                className="block px-3 py-2.5 rounded-lg hover:bg-orange-50 text-slate-700 hover:text-orange-800 transition-colors"
+                                            >
                                                 <div className="font-semibold text-sm">👥 จัดการพนักงาน</div>
                                                 <div className="text-xs text-slate-400 mt-0.5">รายชื่อและข้อมูลพนักงาน</div>
                                             </Link>
-                                            <Link href="/admin/criteria" className="block px-3 py-2.5 rounded-lg hover:bg-orange-50 text-slate-700 hover:text-orange-800 transition-colors">
+                                            <Link
+                                                href="/admin/criteria"
+                                                onClick={(e) => handleNavigation(e, '/admin/criteria')}
+                                                className="block px-3 py-2.5 rounded-lg hover:bg-orange-50 text-slate-700 hover:text-orange-800 transition-colors"
+                                            >
                                                 <div className="font-semibold text-sm">📝 จัดการแบบประเมิน</div>
                                                 <div className="text-xs text-slate-400 mt-0.5">เพิ่ม/ลบ หัวข้อคำถาม</div>
                                             </Link>
-                                            <Link href="/admin/scoring" className="block px-3 py-2.5 rounded-lg hover:bg-orange-50 text-slate-700 hover:text-orange-800 transition-colors">
+                                            <Link
+                                                href="/admin/scoring"
+                                                onClick={(e) => handleNavigation(e, '/admin/scoring')}
+                                                className="block px-3 py-2.5 rounded-lg hover:bg-orange-50 text-slate-700 hover:text-orange-800 transition-colors"
+                                            >
                                                 <div className="font-semibold text-sm">🧮 ตั้งค่าสูตรคำนวณ</div>
                                                 <div className="text-xs text-slate-400 mt-0.5">Scoring Rules & Variables</div>
                                             </Link>
@@ -93,7 +131,12 @@ export default function Navbar() {
                             <div className="h-6 w-px bg-gray-200 hidden sm:block"></div>
 
                             <button
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                    if (navigationGuard) {
+                                        e.preventDefault();
+                                        const canExit = await navigationGuard();
+                                        if (!canExit) return;
+                                    }
                                     await signOut({ redirect: false });
                                     window.location.href = '/login';
                                 }}

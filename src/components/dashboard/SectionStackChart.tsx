@@ -1,71 +1,117 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { DashboardItem } from '@/types/dashboard';
+import { ArrowLeft } from 'lucide-react';
+import { GRADE_COLOR_MAP } from '@/utils/grade-calculation';
 
 interface SectionStackChartProps {
     data: DashboardItem[];
     onSectionClick?: (section: string) => void;
+    onBack?: () => void;
 }
 
-export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data, onSectionClick }) => {
+export const SectionStackChart: React.FC<SectionStackChartProps> = ({ data, onSectionClick, onBack }) => {
+    // State for Drill-Down
+    const [drillDownPd, setDrillDownPd] = useState<string | null>(null);
+
     const chartData = useMemo(() => {
-        // Group by Section
-        const secMap: Record<string, Record<string, number>> = {};
-        const allGrades = new Set<string>();
+        // Prepare Data based on View Mode
+        const map: Record<string, Record<string, number>> = {};
 
         data.forEach(item => {
-            const section = item.section || 'Unknown';
-            const grade = item.grade?.grade || 'N/A';
-            allGrades.add(grade);
+            let groupKey = 'Unknown';
+            const grade = (item.grade?.grade || 'N/A').trim();
 
-            if (!secMap[section]) secMap[section] = { name: section } as any; // 'name' for Recharts
-            secMap[section][grade] = (secMap[section][grade] || 0) + 1;
+            const pdNum = (item.pdNumber || 'No PD').trim();
+            const sectionName = (item.section || 'Unknown').trim();
+
+            if (drillDownPd) {
+                // Level 2: Section View (Filtered by PD)
+                // Filter first (Ensure consistent comparison)
+                if (pdNum !== drillDownPd) return;
+                groupKey = sectionName;
+            } else {
+                // Level 1: PdNumber View
+                groupKey = pdNum;
+            }
+
+            if (!map[groupKey]) map[groupKey] = { name: groupKey } as any;
+            map[groupKey][grade] = (map[groupKey][grade] || 0) + 1;
         });
 
-        return Object.values(secMap);
-    }, [data]);
+        return Object.values(map);
+    }, [data, drillDownPd]);
 
-    const COLORS: Record<string, string> = {
-        'E': '#f97316',
-        'OE': '#fbbf24',
-        'ME': '#fcd34d',
-        'BE': '#d1d5db',
-        'NI': '#e5e7eb',
-        'N/A': '#9ca3af'
+    // ... COLORS constants ...
+    // Use centralized colors
+    const COLORS = GRADE_COLOR_MAP;
+
+    const gradeKeys = ['N/A', 'NI', 'BE', 'ME', 'OE', 'E'];
+
+    const handleBarClick = (data: any) => {
+        if (!drillDownPd) {
+            // Level 1 -> Level 2
+            setDrillDownPd(data.name);
+        } else {
+            // Level 2 Click -> Trigger external action (Filter Section)
+            if (onSectionClick) {
+                onSectionClick(data.name);
+            }
+        }
     };
 
-    const gradeKeys = ['NI', 'BE', 'ME', 'OE', 'E']; // Order matters for stacking
-
     return (
-        <div className="h-[250px] w-full">
-            <style>{`
-                .recharts-wrapper *:focus { outline: none !important; }
-                .recharts-bar-rectangle:focus, .recharts-bar:focus { outline: none !important; }
-            `}</style>
-            <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                    data={chartData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                    className="cursor-pointer outline-none"
-                >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    {gradeKeys.map(key => (
-                        <Bar
-                            key={key}
-                            dataKey={key}
-                            stackId="a"
-                            fill={COLORS[key]}
-                            onClick={(data) => onSectionClick && onSectionClick(data.name as string)}
-                            isAnimationActive={false}
-                            className="outline-none focus:outline-none"
-                        />
-                    ))}
-                </BarChart>
-            </ResponsiveContainer>
+        <div className="h-[280px] w-full flex flex-col">
+            {/* Header / Navigation */}
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                    {drillDownPd && (
+                        <button
+                            onClick={() => {
+                                setDrillDownPd(null);
+                                if (onBack) onBack();
+                            }}
+                            className="p-1 rounded-full hover:bg-slate-100 text-slate-500 transition-colors"
+                            title="Back to Overview"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                        </button>
+                    )}
+                    <span className="text-sm font-semibold text-slate-600">
+                        {drillDownPd ? `Sections in ${drillDownPd}` : 'Overview by PD Number'}
+                    </span>
+                </div>
+            </div>
+
+            <div className="flex-1 min-h-0">
+                <style>{`
+                    .recharts-wrapper *:focus { outline: none !important; }
+                    .recharts-bar-rectangle:focus, .recharts-bar:focus { outline: none !important; }
+                `}</style>
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                        data={chartData}
+                        margin={{ top: 10, right: 30, left: 0, bottom: 5 }}
+                        className="cursor-pointer outline-none"
+                    >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Legend wrapperStyle={{ fontSize: '12px' }} />
+                        {gradeKeys.map(key => (
+                            <Bar
+                                key={key}
+                                dataKey={key}
+                                stackId="a"
+                                fill={COLORS[key]}
+                                onClick={(data) => handleBarClick(data)}
+                                className="outline-none focus:outline-none hover:opacity-80 transition-opacity"
+                            />
+                        ))}
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
         </div>
     );
 };

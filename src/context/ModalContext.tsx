@@ -10,6 +10,13 @@ interface ModalContextType {
 
 const ModalContext = createContext<ModalContextType | undefined>(undefined);
 
+interface ModalContextType {
+    showAlert: (title: string, message: string) => Promise<boolean>;
+    showConfirm: (title: string, message: string) => Promise<boolean>;
+    setNavigationGuard: React.Dispatch<React.SetStateAction<(() => Promise<boolean>) | null>>;
+    navigationGuard: (() => Promise<boolean>) | null; // Exposed for Navbar
+}
+
 export const ModalProvider = ({ children }: { children: ReactNode }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [mode, setMode] = useState<DialogMode>('alert');
@@ -49,8 +56,10 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
         return openDialog('confirm', title, message);
     }, []);
 
+    const [navigationGuard, setNavigationGuard] = useState<(() => Promise<boolean>) | null>(null);
+
     return (
-        <ModalContext.Provider value={{ showAlert, showConfirm }}>
+        <ModalContext.Provider value={{ showAlert, showConfirm, navigationGuard, setNavigationGuard }}>
             {children}
             <Dialog
                 isOpen={isOpen}

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom'; // [T-029] Import Portal
 import { useEvaluation } from '../../hooks/useEvaluation';
 import { useGradingRules } from '../../hooks/useGradingRules'; // Ensure this hook is available or duplicated logic
 import { EmployeeInfoCard } from '../../components/evaluations/EmployeeInfoCard';
@@ -29,6 +30,7 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
         scores,
         handleScoreChange,
         handleSubmit,
+        handleExitEvaluation, // [T-029] Import Safe Exit
         popupData,
         popupScores,
         activePopupId,
@@ -42,6 +44,17 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
     // 🔥 Grading Rules
     // Assuming useGradingRules doesn't depend on much state
     const { rules: gradeRules } = useGradingRules();
+
+    // [T-029] Handle Client-side mounting for Portal
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
+
+    const handleSafeClose = () => {
+        handleExitEvaluation(onClose);
+    };
 
     if (loading) {
         return (
@@ -61,86 +74,108 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
     }
 
     return (
-        <div className="flex flex-col h-full bg-[#f8fafc] border-l border-slate-200 shadow-xl overflow-hidden relative">
-            {/* Header */}
-            <div className="bg-white px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
-                <div>
-                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        📝 แบบประเมิน (Evaluation)
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                        {selectedEmployee.firstName} {selectedEmployee.lastName}
-                    </p>
-                </div>
-                <button
-                    onClick={onClose}
-                    className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors"
-                >
-                    <X size={18} />
-                </button>
-            </div>
-
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-                {/* Info & Stats */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                    <EmployeeInfoCard employee={selectedEmployee} evalYear={evalYear} />
-
-                    {employeeStats && (
-                        <div className="mt-6 pt-6 border-t border-slate-50">
-                            <EmployeeStatsCard
-                                stats={employeeStats}
-                                disciplineScore={disciplineScore}
-                                totalScore={totalScore}
-                                readOnlyItems={readOnlyItems}
-                                showTotalScore={completedEvaluationIds.has(selectedEmployee.id)}
-                                gradingRules={gradeRules}
-                                isCompact={true}
-                            />
-                        </div>
-                    )}
-                </div>
-
-                {/* Evaluation Sections */}
-                {displayCategories.map((cat) => (
-                    <EvaluationSection
-                        key={cat.id}
-                        category={cat}
-                        scores={scores}
-                        onScoreChange={handleScoreChange}
-                        onOpenPopup={openPopup}
-                        activePopupId={activePopupId}
+        <>
+            {mounted && createPortal(
+                <>
+                    {/* [T-034] Backdrop: Lowerz-index (40) vs Drawer (50) */}
+                    <div
+                        onClick={handleSafeClose}
+                        title="คลิกเพื่อปิดหน้าต่าง (มีระบบยืนยัน)"
+                        aria-hidden="true"
+                        className="fixed inset-0 bg-black/20 z-[40] cursor-pointer animate-in fade-in duration-300"
                     />
-                ))}
 
-                {/* Submit Button */}
-                <button
-                    className="w-full bg-[#4caf50] hover:bg-[#43a047] text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-[0.99] text-xl flex items-center justify-center gap-2"
-                    onClick={() => handleSubmit(onSuccess)}
-                >
-                    <span>บันทึกการประเมิน</span>
-                </button>
-
-                <div className="h-10"></div> {/* Spacer */}
-            </div>
-
-            {/* Helper Popup (Overlay) */}
-            {popupData && (
-                <div className="absolute inset-0 z-50 bg-black/50 flex justify-end">
-                    <div className="w-full max-w-md h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300">
-                        <div className="h-full overflow-y-auto">
-                            <ScoreHelperPopup
-                                data={popupData}
-                                popupScores={popupScores}
-                                onClose={closePopup}
-                                onPopupScoreChange={handlePopupScore}
-                                onApplyScore={applyPopupScore}
-                            />
+                    {/* [T-034] Drawer Content: Portaled to Body to escape stacked context */}
+                    <div
+                        className="fixed top-0 right-0 bottom-0 w-[600px] bg-[#f8fafc] border-l border-slate-200 shadow-2xl overflow-hidden z-[50] flex flex-col animate-in slide-in-from-right duration-300"
+                        onClick={(e) => e.stopPropagation()} // Hard stop propagation
+                    >
+                        {/* Header */}
+                        <div className="bg-white px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    📝 แบบประเมิน (Evaluation)
+                                </h2>
+                                <p className="text-xs text-slate-500">
+                                    {selectedEmployee.firstName} {selectedEmployee.lastName}
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleSafeClose}
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors"
+                            >
+                                <X size={18} />
+                            </button>
                         </div>
+
+                        {/* Scrollable Content */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+                            {/* Info & Stats */}
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                <EmployeeInfoCard employee={selectedEmployee} evalYear={evalYear} />
+
+                                {employeeStats && (
+                                    <div className="mt-6 pt-6 border-t border-slate-50">
+                                        <EmployeeStatsCard
+                                            stats={employeeStats}
+                                            disciplineScore={disciplineScore}
+                                            totalScore={totalScore}
+                                            readOnlyItems={readOnlyItems}
+                                            showTotalScore={completedEvaluationIds.has(selectedEmployee.id)}
+                                            gradingRules={gradeRules}
+                                            isCompact={true}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Evaluation Sections */}
+                            {displayCategories.map((cat) => (
+                                <EvaluationSection
+                                    key={cat.id}
+                                    category={cat}
+                                    scores={scores}
+                                    onScoreChange={handleScoreChange}
+                                    onOpenPopup={openPopup}
+                                    activePopupId={activePopupId}
+                                />
+                            ))}
+
+                            {/* Submit Button */}
+                            <button
+                                className="w-full bg-[#4caf50] hover:bg-[#43a047] text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-[0.99] text-xl flex items-center justify-center gap-2"
+                                onClick={() => handleSubmit(onSuccess)}
+                            >
+                                <span>บันทึกการประเมิน</span>
+                            </button>
+
+                            <div className="h-10"></div> {/* Spacer */}
+                        </div>
+
+                        {/* Helper Popup (Overlay inside Drawer) */}
+                        {popupData && (
+                            <div className="absolute inset-0 z-[60] bg-black/50 flex justify-end">
+                                <div
+                                    className="w-full max-w-md h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <div className="h-full overflow-y-auto">
+                                        <ScoreHelperPopup
+                                            data={popupData}
+                                            popupScores={popupScores}
+                                            onClose={closePopup}
+                                            onPopupScoreChange={handlePopupScore}
+                                            onApplyScore={applyPopupScore}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                </div>
+                </>,
+                document.body
             )}
-        </div>
+        </>
     );
 };

@@ -3,13 +3,13 @@
 export type EvaluationCategory = 'A' | 'B' | 'C';
 
 export interface EvaluationItem {
-  id: string; 
+  id: string;
   category: EvaluationCategory;
   categoryTitle: string;
   title: string;
   subtitle: string; //
   description: string;
-  note?: string; 
+  note?: string;
   targetLevel: 'All' | 'Monthly Staff' | 'Supervisor';
 }
 
@@ -20,8 +20,9 @@ export const CATEGORY_DETAILS: Record<string, string> = {
 };
 
 export const HO_SECTIONS = [
-  "บริหาร", "ทรัพยากรมนุษย์", "การเงิน", "ธุรการ1", "บัญชี", 
-  "ประมาณราคา", "จัดซื้อ", "วิจัยและพัฒนา", "พัฒนาธุรกิจดิจิทัล", "เทคโนโลยีสารสนเทศ"
+  "บริหาร", "ทรัพยากรมนุษย์", "การเงิน", "ธุรการ1", "บัญชี",
+  "ประมาณราคา", "จัดซื้อ", "วิจัยและพัฒนา", "พัฒนาธุรกิจดิจิทัล", "เทคโนโลยีสารสนเทศ",
+  "เขียนแบบ"
 ];
 
 export const EVALUATION_CRITERIA: EvaluationItem[] = [

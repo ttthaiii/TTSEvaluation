@@ -11,6 +11,23 @@ export interface GradeCriteria {
     icon: string;
 }
 
+export const GRADE_COLOR_MAP: Record<string, string> = {
+    'E': '#f97316',   // Orange-500
+    'OE': '#facc15',  // Yellow-400
+    'ME': '#fbbf24',  // Amber-400 (Peach-ish) -> OR '#fdba74' (Orange-300) -> Let's use Orange-400 #fb923c
+    'BE': '#6b7280',  // Gray-500 (Dark Grey)
+    'NI': '#ef4444',  // Red-500
+    'N/A': '#e5e7eb',  // Gray-200 (Light Grey)
+    'รอประเมิน': '#e5e7eb' // Fix for hardcoded Thai string in dashboard
+};
+
+// Tweaking to match user specific request precisely
+// E: Orange
+// OE: Yellow
+// ME: Peach/Light Orange
+// BE: Gray
+// N/A: Light Gray
+
 export const GRADE_RANGES: GradeCriteria[] = [
     {
         grade: 'E',
@@ -18,9 +35,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานดีเลิศเกินความคาดหมาย',
         min: 86,
         max: 100,
-        colorClass: 'text-purple-600',
-        bgClass: 'bg-purple-50',
-        borderClass: 'border-purple-200',
+        colorClass: 'text-orange-600',
+        bgClass: 'bg-orange-50',
+        borderClass: 'border-orange-200',
         icon: '👑'
     },
     {
@@ -29,9 +46,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานดีกว่ามาตรฐานที่กำหนด',
         min: 76,
         max: 85.99,
-        colorClass: 'text-emerald-600',
-        bgClass: 'bg-emerald-50',
-        borderClass: 'border-emerald-200',
+        colorClass: 'text-yellow-500',
+        bgClass: 'bg-yellow-50',
+        borderClass: 'border-yellow-200',
         icon: '🌟'
     },
     {
@@ -40,9 +57,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานเป็นไปตามมาตรฐาน',
         min: 65,
         max: 75.99,
-        colorClass: 'text-blue-600',
-        bgClass: 'bg-blue-50',
-        borderClass: 'border-blue-200',
+        colorClass: 'text-orange-400',
+        bgClass: 'bg-orange-50',
+        borderClass: 'border-orange-200',
         icon: '👍'
     },
     {
@@ -51,9 +68,9 @@ export const GRADE_RANGES: GradeCriteria[] = [
         description: 'ผลงานต่ำกว่ามาตรฐานในบางจุด',
         min: 50,
         max: 64.99,
-        colorClass: 'text-orange-500',
-        bgClass: 'bg-orange-50',
-        borderClass: 'border-orange-200',
+        colorClass: 'text-gray-500',
+        bgClass: 'bg-gray-100', // Darker bg for visibility
+        borderClass: 'border-gray-300',
         icon: '⚠️'
     },
     {

@@ -49,10 +49,10 @@ export const getEvaluationYear = (): number => {
   const currentMonth = now.getMonth(); // 0 = Jan, 1 = Feb, ...
 
   // ถ้าอยู่ในช่วง มกรา - มีนา (Quarter 1) ให้ return ปีที่แล้ว
-  if (currentMonth <= 2) { 
+  if (currentMonth <= 2) {
     return currentYear - 1;
   }
-  
+
   return currentYear;
 };
 
@@ -60,8 +60,43 @@ export const getEvaluationYear = (): number => {
  * สร้าง string สำหรับ Period เช่น "2025-Annual" หรือ "2025-H1"
  */
 export const getCurrentPeriod = (): string => {
-    const year = getEvaluationYear();
-    // คุณสามารถเปลี่ยน Logic ตรงนี้ได้ถ้ามีแบ่ง H1/H2
-    // เบื้องต้นให้เป็น Annual (ทั้งปี) ไปก่อนตามโจทย์
-    return `${year}-Annual`;
+  const year = getEvaluationYear();
+  // คุณสามารถเปลี่ยน Logic ตรงนี้ได้ถ้ามีแบ่ง H1/H2
+  // เบื้องต้นให้เป็น Annual (ทั้งปี) ไปก่อนตามโจทย์
+  return `${year}-Annual`;
+};
+
+export const getRawTenure = (startDate: string | Timestamp | null | undefined, targetDate?: Date): { years: number, months: number, days: number, totalDays: number } => {
+  if (!startDate) return { years: 0, months: 0, days: 0, totalDays: 0 };
+
+  let start: Date;
+  if (typeof startDate === 'object' && 'toDate' in startDate) {
+    start = startDate.toDate();
+  } else if (typeof startDate === 'string') {
+    start = new Date(startDate);
+  } else {
+    return { years: 0, months: 0, days: 0, totalDays: 0 };
+  }
+
+  const end = targetDate || new Date();
+  const diffTime = end.getTime() - start.getTime();
+  const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); // Rough estimate
+
+  // Precise YMD calculation
+  let years = end.getFullYear() - start.getFullYear();
+  let months = end.getMonth() - start.getMonth();
+  let days = end.getDate() - start.getDate();
+
+  if (days < 0) {
+    months--;
+    // Get days in previous month
+    const prevMonth = new Date(end.getFullYear(), end.getMonth(), 0);
+    days += prevMonth.getDate();
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+
+  return { years, months, days, totalDays };
 };

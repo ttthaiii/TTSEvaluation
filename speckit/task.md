@@ -268,6 +268,23 @@
   - **Status:** Resolved
   - **Cause:** 2-pass calculation is insufficient for 3-layer dependencies (Discipline -> Behavior -> Total Score). Total Score reads stale Behavior score from Pass 1.
   - **Solution:** Increase calculation passes to 5 to handle deeper dependency chains.
+- **[T-009-E1-1]** (Invalid Field Path in Score Import)
+  - **Date:** 2026-01-13
+  - **Status:** Resolved
+  - **Cause:** Firestore dot notation does not support keys with special characters (e.g., `[O]-1`).
+  - **Solution:** Switched to using `FieldPath` object for dynamic updates in `batch.update`.
+- **[T-009-E2-1]** (Firebase Token 500 Error)
+  - **Date:** 2026-01-13
+  - **Status:** Resolved
+  - **Cause:** `firebase-admin` initialization failed in production because `service-account.json` file is missing.
+  - **Solution:** Added support for `FIREBASE_SERVICE_ACCOUNT_KEY` environment variable in `src/lib/firebase-admin.ts`.
+- **[T-009-E2-2]** (Persistent 500 Error on Production)
+  - **Date:** 2026-01-13
+  - **Status:** In Progress
+  - **Cause:** Deployment via CLI ignores `.env.local`. Also, "Crash on Startup" prevented error handling.
+  - **Solution:** 
+    1. Renamed env var to `APP_SERVICE_ACCOUNT_KEY` to avoid reserved prefix.
+    2. Refactored `firebase-admin.ts` to **Lazy Loading** pattern to prevent server crash and allow `route.ts` to catch init errors and return them as JSON.
 ### [T-012] Implement Grade Calculation & Display
 - **Concept:** แสดงเกรด (A/B/C) และสีตามช่วงคะแนน Total Score
 - **Principle:** Configuration-based Grade Ranges
@@ -302,3 +319,78 @@
 - **Implementation Detail:**
   1. Check `sections` length in `useEvaluation` hook.
   2. If `length === 1`, set `selectedSection` to that value.
+
+### [T-FIX-002] Remove Success Modal from Main Page
+- **Concept:** Remove redundant success alert after saving evaluation.
+- **Status:** Done
+- **Implementation Detail:** Remove `showAlert` in `useEvaluation` default success flow.
+
+### [T-027] Evaluation Draft State
+- **Concept:** Allow saving incomplete evaluations as Draft.
+- **Status:** Done
+- **Implementation Detail:**
+  1. Add `status: 'Draft' | 'Completed'` to `EvaluationRecord`.
+  2. Implement `validateCompletion` in `useEvaluation`.
+  3. Show Draft Modal if incomplete.
+  4. Update Dashboard to show (Draft) label style.
+
+### [T-028] Waiting Status in Dashboard
+- **Concept:** Show "Waiting" status for unevaluated employees.
+- **Status:** Done
+- **Implementation Detail:**
+  1. Map all employees in Dashboard.
+  2. Handle null evaluation as "Waiting".
+  3. Style "Waiting" rows as gray/disabled.
+
+### [T-029] Two-Step Exit Confirmation
+- **Concept:** Prevent accidental exit with 2-step check.
+- **Status:** Done
+- **Implementation Detail:**
+  1. Trigger on close/change employee.
+  2. Step 1: Confirm Exit?
+  3. Step 2: Check incompleteness -> Ask to Save Draft.
+
+### [T-030] Add PdNumber Filter & Enhance Search
+- **Concept:** เพิ่ม Filter PdNumber และปรับปรุงช่องค้นหาเป็น Autocomplete
+- **Implementation Detail:**
+  1. Add `pdNumber` to `Employee` type and fetch logic.
+  2. Implement `PdNumber` filter in Dashboard.
+  3. Enhance Search Box to Autocomplete (Display: "ID Name Surname").
+- **Confirm Task:**
+  - [x] Filter PdNumber works.
+  - [x] Search Autocomplete works.
+
+### [T-031] Chart Drill-Down Support (Section -> PdNumber)
+- **Concept:** คลิกกราฟแท่ง Section เพื่อดูรายละเอียดราย PdNumber
+- **Implementation Detail:**
+  1. Modify `SectionStackChart` to support drill-down state.
+  2. Implement grouping logic by `pdNumber`.
+  3. Add Back button to reset view.
+- **Confirm Task:**
+  - [x] Click Section -> Shows PdNumbers.
+  - [x] Click Back -> Shows Sections.
+
+### [T-032] Configurable Tenure Eligibility
+- **Concept:** กำหนดเกณฑ์อายุงานขั้นต่ำสำหรับผู้ที่จะได้รับการประเมิน
+- **Implementation Detail:**
+  1. Add `getRawTenure` util.
+  2. Implement Admin UI to set Rule (Min Tenure, Unit).
+  3. Filter employees in `useEvaluation`.
+- **Confirm Task:**
+  - [ ] Set Rule (e.g. 1 Year).
+  - [ ] Verify New employees are hidden.
+
+### [T-033] Fix Re-evaluation Exit Prompt Bug
+- **Concept:** Fix issue where confirming re-evaluation triggers immediate exit prompt.
+- **Status:** Done
+- **Implementation Detail:**
+  1. Refactor `switchEmployee` in `useEvaluation.ts` to delay state update until after confirmation.
+  2. Harden `Dialog.tsx` with `stopPropagation` to prevent efficient bubbling.
+
+### [T-034] Fix Page Disabled (Overlay) Issue
+- **Concept:** Fix z-index conflict where Portal Backdrop covers Non-Portal Drawer.
+- **Status:** Done
+- **Implementation Detail:**
+  1. Portal the Drawer Content alongside the Backdrop.
+  2. Lower Backdrop z-index (40) and raise Drawer Content (50).
+  3. Clean up Dashboard spacer styles.

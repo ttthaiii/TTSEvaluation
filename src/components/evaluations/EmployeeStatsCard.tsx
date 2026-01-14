@@ -111,7 +111,7 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                             </div>
                         </div>
                         <div className={`flex flex-col ${isCompact ? 'items-start w-full' : 'items-end'}`}>
-                            <div className={`text-4xl font-black ${gradeData?.colorClass || 'text-orange-600'} tracking-tight`}>
+                            <div className={`text-4xl font-black ${gradeData?.colorClass || 'text-gray-300'} tracking-tight`}>
                                 {totalScore ?? '-'}
                             </div>
                             {gradeData && (

@@ -4,7 +4,7 @@ import { collection, getDocs, addDoc, query, where, Timestamp, doc, setDoc, getD
 import { db } from '../lib/firebase';
 import { HO_SECTIONS } from '../data/evaluation-criteria';
 import { Employee } from '../types/employee';
-import { calculateServiceTenure, getEvaluationYear, getCurrentPeriod } from '../utils/dateUtils';
+import { calculateServiceTenure, getEvaluationYear, getCurrentPeriod, getRawTenure } from '../utils/dateUtils';
 import { Category, EvaluationRecord, QuestionItem, ScoringRule } from '../types/evaluation';
 import { EmployeeStats } from '../components/evaluations/EmployeeStatsCard';
 import { PopupData } from '../components/evaluations/ScoreHelperPopup';
@@ -19,7 +19,7 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
     const targetEmpId = props?.defaultEmployeeId || searchParams.get('employeeId');
 
     // 🔥 Modal Hook
-    const { showAlert, showConfirm } = useModal();
+    const { showAlert, showConfirm, setNavigationGuard } = useModal();
 
     // ... (Year Logic)
     const evalYear = typeof getEvaluationYear === 'function' ? getEvaluationYear() : new Date().getFullYear();
@@ -74,6 +74,7 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                     startDate: d.startDate,
                     isActive: d.isActive ?? true,
                     evaluatorId: d.evaluatorId || "", // Ensure field exists
+                    pdNumber: d.pdNumber || "", // [T-030] Map PdNumber
                 } as Employee);
             });
 
@@ -101,7 +102,8 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                         disciplineScore: d.disciplineScore,
                         updatedAt: d.updatedAt,
                         createdAt: d.createdAt,
-                        aiScore: d.aiScore
+                        aiScore: d.aiScore,
+                        status: d.status // [T-027] Map Status field
                     };
 
                     // Check Completeness
@@ -124,6 +126,15 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
             });
             setCompletedEvaluationIds(completedIds);
 
+            // [T-032] Fetch Eligibility Config
+            let eligibilityRule: { minTenure: number, tenureUnit: string, cutoffDate: string } | null = null;
+            try {
+                const ruleSnap = await getDoc(doc(db, 'config_general', 'eligibility'));
+                if (ruleSnap.exists()) {
+                    eligibilityRule = ruleSnap.data() as any;
+                }
+            } catch (e) { console.warn("No eligibility rule found, using default"); }
+
             const rulesSnapshot = await getDocs(collection(db, 'scoring_formulas'));
             const rules: ScoringRule[] = [];
             rulesSnapshot.forEach(doc => {
@@ -137,7 +148,37 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                 });
             });
 
-            setEmployees(empList);
+            // [T-032] 🔥 Apply Eligibility Filter
+            let finalEmpList = empList;
+            if (eligibilityRule && eligibilityRule.minTenure > 0) {
+                const { minTenure, tenureUnit, cutoffDate } = eligibilityRule;
+
+                // Determine Cutoff Date
+                let targetDate: Date;
+                if (cutoffDate) {
+                    targetDate = new Date(cutoffDate);
+                } else {
+                    targetDate = new Date(evalYear, 11, 31); // 31 Dec
+                }
+
+                finalEmpList = empList.filter(emp => {
+                    const raw = getRawTenure(emp.startDate, targetDate);
+
+                    if (tenureUnit === 'years') {
+                        // Logic: Have completed X years?
+                        // If 1 Year, needs year >= 1
+                        return raw.years >= minTenure;
+                    } else if (tenureUnit === 'months') {
+                        const totalMonths = (raw.years * 12) + raw.months;
+                        return totalMonths >= minTenure;
+                    } else { // Days
+                        return raw.totalDays >= minTenure;
+                    }
+                });
+                console.log(`🔍 Eligibility Filter Applied: ${empList.length} -> ${finalEmpList.length} (Rule: ${minTenure} ${tenureUnit} by ${targetDate.toLocaleDateString()})`);
+            }
+
+            setEmployees(finalEmpList);
 
             // 🔥 Filter by Authenticated User (Evaluator)
             // If Admin -> Show All
@@ -222,15 +263,25 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
             if (target) {
                 // If not already selected (ป้องกัน loop หรือ re-fetch ไม่จำเป็น)
                 if (selectedEmployeeId !== target.id) {
-                    console.log("🔗 Auto-selecting employee from URL:", target.firstName);
-                    handleEmployeeChange({ target: { value: target.id } } as any);
+                    // Case 1: Initial Load (No employee selected yet) -> Bypass Exit Confirmation
+                    if (!selectedEmployeeId) {
+                        console.log("🔗 Initial Auto-select:", target.firstName);
+                        switchEmployee(target.id);
+                    }
+                    // Case 2: Switching from one employee to another via Prop/URL -> Require Confirmation
+                    else {
+                        if (selectedEmployeeId === target.id) {
+                            console.log("🔗 Auto-select: Already selected, skipping.", { selectedEmployeeId });
+                            return;
+                        }
+                        console.log("🔗 Auto-select: Switching", { from: selectedEmployeeId, to: target.id });
+                        handleEmployeeChange({ target: { value: target.id } } as any);
+                    }
 
                     // Optional: ถ้าต้องการเลือก Section ให้ตรงด้วย (เพื่อความเนียน)
                     if (target.section !== selectedSection && selectedSection !== 'All') {
-                        // อาจจะไม่จำเป็นต้องเปลี่ยน Section Dropdown ถ้า UI แสดงผลได้อยู่แล้ว
-                        // แต่ถ้า Filter มันบังอยู่ อาจจะต้อง Reset Filter
                         setSelectedSection('All');
-                        setFilteredEmployees(employees); // Reset filter to show all so the selected one is visible
+                        setFilteredEmployees(employees);
                     }
                 }
             } else {
@@ -441,60 +492,93 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
         setFilteredEmployees(sec ? employees.filter(emp => emp.section === sec) : []);
     };
 
-    const handleEmployeeChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const empId = e.target.value;
-        setScores({});
-        setEmployeeStats(null);
-        setDisciplineScore("-");
+    const switchEmployee = async (empId: string) => {
+        console.log("🔄 switchEmployee Called", { empId });
 
         if (!empId) {
+            setScores({});
+            setEmployeeStats(null);
+            setDisciplineScore("-");
             setSelectedEmployeeId('');
             setSelectedEmployee(null);
             return;
         }
 
         const emp = employees.find(e => e.id === empId) || null;
+        if (!emp) return;
+
+        // [T-033] Fix: Check for Re-evaluation BEFORE setting state
+        // This prevents the "Exit Guard" from activating before the user confirms they want to enter re-evaluation.
+        // แก้ไขปัญหาระบบถาม "ยืนยันการออก" ซ้อนกับ "ยืนยันการประเมินซ้ำ"
+        const prevEval = existingEvaluations[empId];
+
+        if (prevEval && emp && completedEvaluationIds.has(emp.id)) {
+            console.log("⚠️ Asking Re-Eval Confirm");
+            const confirmReEval = await showConfirm(
+                'ยืนยันการประเมินซ้ำ',
+                `⚠️ พนักงานคนนี้ (${emp.firstName}) ถูกประเมินไปแล้ว\nคุณต้องการกลับไปแก้ไขการประเมินหรือไม่?`
+            );
+
+            if (!confirmReEval) {
+                // User Cancelled: Do not switch, do not update state
+                // If called from handleEmployeeChange -> The UI Select will revert on re-render if selectedEmployeeId didn't change.
+                return;
+            }
+        }
+
+        // --- Confirmed or No Confirmation Needed ---
+
+        // Now safe to update state (activates Navigation Guard)
+        setScores({});
+        setEmployeeStats(null);
+        setDisciplineScore("-");
+
         setSelectedEmployee(emp);
         setSelectedEmployeeId(empId);
 
         let currentLoadedScores = {};
-        const prevEval = existingEvaluations[empId];
 
         if (prevEval) {
             currentLoadedScores = prevEval.scores;
             setScores(prevEval.scores);
-            if (emp && completedEvaluationIds.has(emp.id)) {
-                const confirmReEval = await showConfirm('ยืนยันการประเมินซ้ำ', `⚠️ พนักงานคนนี้ (${emp.firstName}) ถูกประเมินไปแล้ว\nคุณต้องการกลับไปแก้ไขการประเมินหรือไม่?`);
-                if (!confirmReEval) {
-                    setSelectedEmployeeId('');
-                    setSelectedEmployee(null);
-                    setScores({});
-                    return;
-                }
-            }
         }
 
-        if (emp) {
-            try {
-                const statsRef = doc(db, 'users', emp.id, 'yearlyStats', String(evalYear));
-                const statsSnap = await getDoc(statsRef);
-                let statsData: EmployeeStats;
-                if (statsSnap.exists()) {
-                    statsData = statsSnap.data() as EmployeeStats;
-                } else {
-                    statsData = {
-                        totalLateMinutes: 0, totalSickLeaveDays: 0,
-                        totalAbsentDays: 0, warningCount: 0,
-                        year: evalYear
-                    } as any;
-                }
-                setEmployeeStats(statsData);
-                runDisciplineCalculation(statsData, currentLoadedScores, emp);
-            } catch (err) {
-                console.error("Error fetching stats:", err);
+        try {
+            const statsRef = doc(db, 'users', emp.id, 'yearlyStats', String(evalYear));
+            const statsSnap = await getDoc(statsRef);
+            let statsData: EmployeeStats;
+            if (statsSnap.exists()) {
+                statsData = statsSnap.data() as EmployeeStats;
+            } else {
+                statsData = {
+                    totalLateMinutes: 0, totalSickLeaveDays: 0,
+                    totalAbsentDays: 0, warningCount: 0,
+                    year: evalYear
+                } as any;
             }
+            setEmployeeStats(statsData);
+            runDisciplineCalculation(statsData, currentLoadedScores, emp);
+        } catch (err) {
+            console.error("Error fetching stats:", err);
         }
+
         setPopupData(null);
+    };
+
+    const handleEmployeeChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const empId = e.target.value;
+        const previousId = selectedEmployeeId;
+
+        // If trying to select the same employee, do nothing
+        if (empId === previousId) return;
+
+        // Use handleExitEvaluation to confirm exit from current employee -> then switch
+        await handleExitEvaluation(() => switchEmployee(empId));
+
+        // Note: If user cancels in handleExitEvaluation, the callback isn't called.
+        // The UI (Select) might need to be forced back to 'previousId' if it's uncontrolled,
+        // but since it's controlled by selectedEmployeeId, React re-render should fix it 
+        // if we didn't update state.
     };
 
     const handleScoreChange = (criteriaId: string, score: number) => {
@@ -505,10 +589,54 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
         }
     };
 
-    const handleSubmit = async (onSuccess?: (savedData: EvaluationRecord) => void) => {
+    const checkCompleteness = () => {
+        if (!selectedEmployee) return [];
+        const missing: string[] = [];
+
+        categories.forEach(cat => {
+            // Skip Category C for Monthly Staff
+            if (cat.id === 'C' && selectedEmployee.level === 'Monthly Staff') return;
+
+            cat.questions.forEach(q => {
+                // Skip Read Only items
+                if (q.isReadOnly) return;
+                // Skip B-4 for HO Sections
+                if (q.id === 'B-4' && HO_SECTIONS.includes(selectedEmployee.section)) return;
+
+                if (scores[q.id] === undefined) {
+                    missing.push(q.id); // [T-027] เก็บแค่ ID ตาม Requirement
+                }
+            });
+        });
+        return missing;
+    };
+
+    const handleSubmit = async (
+        onSuccess?: (savedData: EvaluationRecord) => void,
+        overrideStatus?: 'Draft' | 'Completed',
+        skipConfirm: boolean = false
+    ) => {
         if (!selectedEmployee) return;
 
-        const isConfirmed = await showConfirm('ยืนยันการบันทึก', `คุณต้องการบันทึกผลการประเมินของ\n${selectedEmployee.firstName} ${selectedEmployee.lastName} ใช่หรือไม่?`);
+        const missingItems = checkCompleteness();
+        let status: 'Draft' | 'Completed' = overrideStatus || 'Completed';
+        let isConfirmed = skipConfirm;
+
+        if (!skipConfirm) {
+            if (missingItems.length > 0) {
+                // Case: Incomplete -> Ask to save as Draft
+                const msg = `⚠️ ยังประเมินไม่ครบ ${missingItems.length} หัวข้อ:\n${missingItems.join(', ')}\n\nคุณต้องการบันทึกเป็น "แบบร่าง (Draft)" หรือไม่?`;
+                isConfirmed = await showConfirm('ยืนยันการบันทึกแบบร่าง', msg);
+                status = 'Draft';
+            } else {
+                // Case: Complete -> Standard Confirm
+                isConfirmed = await showConfirm('ยืนยันการบันทึก', `คุณต้องการบันทึกผลการประเมินของ\n${selectedEmployee.firstName} ${selectedEmployee.lastName} ใช่หรือไม่?`);
+                status = 'Completed';
+            }
+        } else if (!overrideStatus) {
+            status = missingItems.length > 0 ? 'Draft' : 'Completed';
+        }
+
         if (!isConfirmed) return;
 
         try {
@@ -526,7 +654,8 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
                 totalScore: Number(totalScore.toFixed(2)),
                 updatedAt: Timestamp.now(),
                 period: currentPeriod,
-                evaluationYear: evalYear
+                evaluationYear: evalYear,
+                status: status // [T-027] Save Status
             };
 
             let savedDocId = "";
@@ -562,20 +691,88 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
             }
 
             if (!onSuccess) {
-                // Default behavior: refresh and clear selection (only if not handled by custom success flow)
+                // Default behavior
                 await initData();
                 setScores({});
                 setSelectedEmployeeId('');
                 setSelectedEmployee(null);
                 setEmployeeStats(null);
                 setDisciplineScore("-");
-                await showAlert("สำเร็จ", "✅ บันทึกการประเมินเรียบร้อย!");
+                // [T-FIX-002] Removed success alert
             }
         } catch (error) {
             console.error("Error saving evaluation:", error);
             await showAlert("ข้อผิดพลาด", "❌ เกิดข้อผิดพลาดในการบันทึก: " + error);
         }
     };
+
+    // [T-029] Two-Step Exit Confirmation
+    const handleExitEvaluation = async (onConfirmedExit?: () => void): Promise<boolean> => {
+        console.log("🚨 handleExitEvaluation Called", { selectedEmployee: selectedEmployee?.id });
+        if (!selectedEmployee) {
+            if (onConfirmedExit) onConfirmedExit();
+            return true;
+        }
+
+        // Step 1: Confirm Exit
+        const confirmExit = await showConfirm(
+            'ยืนยันการออก',
+            'คุณกำลังทำการประเมินอยู่ ต้องการออกจากหน้านี้ใช่หรือไม่?'
+        );
+
+        if (!confirmExit) return false; // User Cancelled Exit
+
+        // Step 2: Check Incompleteness -> Ask Draft
+        const missingItems = checkCompleteness();
+        if (missingItems.length > 0) {
+            const saveDraft = await showConfirm(
+                'บันทึกแบบร่าง',
+                `มี ${missingItems.length} หัวข้อที่ยังไม่ได้ประเมิน (${missingItems.join(', ')}) ต้องการบันทึกเป็น Draft หรือไม่?`
+            );
+
+            if (saveDraft) {
+                // Yes: Save as Draft then Exit
+                // We await handleSubmit, and if it succeeds, we proceed.
+                // We need to ensure handleSubmit doesn't throw or we handle it.
+                // Assuming handleSubmit handles errors internally.
+                await handleSubmit(() => {
+                    if (onConfirmedExit) onConfirmedExit();
+                }, 'Draft', true);
+                return true;
+            } else {
+                // No: Discard and Exit
+                if (onConfirmedExit) onConfirmedExit();
+                return true;
+            }
+        } else {
+            // Already complete -> Just Exit
+            if (onConfirmedExit) onConfirmedExit();
+            return true;
+        }
+    };
+
+    // 🔥 Register Navigation Guard
+    useEffect(() => {
+        if (selectedEmployee) {
+            setNavigationGuard(() => () => handleExitEvaluation());
+
+            // Register Browser Native BeforeUnload
+            const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+                e.preventDefault();
+                e.returnValue = ''; // Trigger browser confirmation
+            };
+            window.addEventListener('beforeunload', handleBeforeUnload);
+
+            return () => {
+                setNavigationGuard(null);
+                window.removeEventListener('beforeunload', handleBeforeUnload);
+            };
+        } else {
+            setNavigationGuard(null);
+        }
+    }, [selectedEmployee, selectedEmployeeId, scores, disciplineScore]); // Helper dependencies to ensure scope is fresh if needed, though mostly selectedEmployee is key.
+
+
 
     const updateLocalEvaluation = (newEval: EvaluationRecord) => {
         setExistingEvaluations(prev => ({
@@ -690,6 +887,7 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
         popupScores,
         categories,
         employees,
+        handleExitEvaluation, // [T-029] Two-Step Confirmation
         refreshData: initData, // 🔥 Exposed for manual refresh
         updateLocalEvaluation, // 🔥 Exposed for local update
     };

@@ -29,20 +29,42 @@ export default function DashboardPage() {
 
     const [selectedSection, setSelectedSection] = useState<string>('All');
     const [selectedGrade, setSelectedGrade] = useState<string>('All');
+    const [selectedPdNumber, setSelectedPdNumber] = useState<string>('All'); // [T-030]
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
     const [evaluationPanelId, setEvaluationPanelId] = useState<string | null>(null); // 🔥 Drawer State
 
-    // 1. Filter ONLY Completed Employees
-    const completedEmployees = useMemo(() => {
-        return employees.filter(emp => completedEvaluationIds.has(emp.id));
-    }, [employees, completedEvaluationIds]);
-
-    // 2. Prepare Data for Dashboard
+    // 2. Prepare Data for Dashboard (Map ALL employees)
     const dashboardData = useMemo(() => {
-        return completedEmployees.map(emp => {
-            const evaluation = existingEvaluations[emp.id];
-            const totalScore = Number(evaluation?.totalScore || 0);
-            const grade = getGrade(totalScore);
+        return employees.map(emp => {
+            const rawEval = existingEvaluations[emp.id];
+
+            // [T-028] Filter out "ghost" evaluations (legacy 0-score records with no status)
+            // Considered valid ONLY if: Has Status (Draft/Completed) OR Has Score > 0
+            const isValidEval = rawEval && (
+                rawEval.status ||
+                (rawEval.totalScore && Number(rawEval.totalScore) > 0)
+            );
+
+            const evaluation = isValidEval ? rawEval : undefined;
+
+            let totalScore = 0;
+            let grade = {
+                grade: 'รอประเมิน',
+                range: '-',
+                description: 'ยังไม่ได้รับการประเมิน',
+                colorClass: 'text-slate-400',
+                bgClass: 'bg-slate-100',
+                label: 'Waiting',
+                min: 0,
+                max: 0,
+                borderClass: 'border-slate-200',
+                icon: '⏳'
+            } as any;
+
+            if (evaluation) {
+                totalScore = Number(evaluation.totalScore || 0);
+                grade = getGrade(totalScore);
+            }
 
             return {
                 ...emp,
@@ -51,20 +73,46 @@ export default function DashboardPage() {
                 totalScore
             };
         });
-    }, [completedEmployees, existingEvaluations]);
+    }, [employees, existingEvaluations]);
+
+    // [T-030] Extract Unique PdNumbers
+    const uniquePdNumbers = useMemo(() => {
+        const pds = new Set<string>();
+        dashboardData.forEach(e => {
+            if (e.pdNumber) pds.add(e.pdNumber);
+        });
+        return Array.from(pds).sort();
+    }, [dashboardData]);
+
+    // [T-030] Autocomplete Options
+    const employeeOptions = useMemo(() => {
+        return dashboardData.map(e => ({
+            id: e.id,
+            name: `${e.employeeId} ${e.firstName} ${e.lastName}`
+        }));
+    }, [dashboardData]);
 
     // 3. Apply Filters
     const filteredData = useMemo(() => {
         return dashboardData.filter(item => {
             const matchSection = selectedSection === 'All' || item.section === selectedSection;
             const matchGrade = selectedGrade === 'All' || item.grade?.grade === selectedGrade;
-            const matchId = !selectedEmployeeId || item.employeeId.includes(selectedEmployeeId) ||
-                item.firstName.includes(selectedEmployeeId) ||
-                item.lastName.includes(selectedEmployeeId);
+            const matchPd = selectedPdNumber === 'All' || item.pdNumber === selectedPdNumber; // [T-030]
 
-            return matchSection && matchGrade && matchId;
+            // [T-030] Enhanced Search Match
+            // Matches: ID, Firstname, Lastname, OR "ID First Last" string format from autocomplete
+            const searchLower = selectedEmployeeId.toLowerCase().trim();
+            const fullNameString = `${item.employeeId} ${item.firstName} ${item.lastName}`.toLowerCase();
+
+            const matchId = !selectedEmployeeId ||
+                item.employeeId.toLowerCase().includes(searchLower) ||
+                item.firstName.toLowerCase().includes(searchLower) ||
+                item.lastName.toLowerCase().includes(searchLower) ||
+                fullNameString.includes(searchLower);
+
+            return matchSection && matchGrade && matchPd && matchId;
         });
-    }, [dashboardData, selectedSection, selectedGrade, selectedEmployeeId]);
+    }, [dashboardData, selectedSection, selectedGrade, selectedPdNumber, selectedEmployeeId]);
 
     const handleGradeClick = (grade: string) => {
         setSelectedGrade(prev => prev === grade ? 'All' : grade);
@@ -75,6 +123,11 @@ export default function DashboardPage() {
     };
 
     const handleRowClick = (empId: string) => {
+        // [T-030] Handle Autocomplete Selection (which might send "ID Name" string)
+        // Check if input matches an exact option, extract the real ID?
+        // Actually, the Table onRowClick sends the real "emp.id" (docId) or "emp.employeeId"? 
+        // EmployeeTable sends `emp.id` (Firestore ID). But search uses `selectedEmployeeId` (State).
+        // Let's keep logic simple: If clicking row, toggle ID filter.
         setSelectedEmployeeId(prev => prev === empId ? '' : empId);
     };
 
@@ -112,6 +165,11 @@ export default function DashboardPage() {
                         searchTerm={selectedEmployeeId}
                         onSearchChange={setSelectedEmployeeId}
                         totalCount={filteredData.length}
+                        // [T-030] New Props
+                        pdNumbers={uniquePdNumbers}
+                        selectedPdNumber={selectedPdNumber}
+                        onPdNumberChange={setSelectedPdNumber}
+                        employeeOptions={employeeOptions}
                     />
 
                     {/* Charts Grid */}
@@ -123,7 +181,11 @@ export default function DashboardPage() {
                         </div>
                         <div className="rounded-lg bg-white p-4 shadow lg:col-span-2">
                             <h3 className="mb-4 text-lg font-semibold text-slate-700">จำนวนพนักงานแยกเกรด ตามส่วนงานต่างๆ</h3>
-                            <SectionStackChart data={filteredData} onSectionClick={handleSectionClick} />
+                            <SectionStackChart
+                                data={filteredData}
+                                onSectionClick={handleSectionClick}
+                                onBack={() => setSelectedSection('All')}
+                            />
                         </div>
 
                         {/* Row 2: Distribution & Radar (Adjusted layout) */}
@@ -152,11 +214,11 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {/* Right Side: Evaluation Drawer */}
+            {/* Right Side: Evaluation Drawer (Spacer & Container) */}
             <div
                 className={`
-                    border-l border-slate-200 bg-white shadow-2xl transition-all duration-300 transform 
-                    ${evaluationPanelId ? 'w-[600px] translate-x-0' : 'w-0 translate-x-full opacity-0 pointer-events-none'}
+                    transition-all duration-300 transform 
+                    ${evaluationPanelId ? 'w-[600px] translate-x-0' : 'w-0 translate-x-full'}
                 `}
             >
                 {evaluationPanelId && (

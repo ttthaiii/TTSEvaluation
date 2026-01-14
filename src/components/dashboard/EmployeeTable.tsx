@@ -111,13 +111,27 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                                 }
                             }
 
+                            const isDraft = item.evaluation?.status === 'Draft';
+                            const isWaiting = !item.evaluation; // [T-028] Waiting State
+
                             return (
                                 <tr
                                     key={item.id}
-                                    className="bg-white border-b hover:bg-orange-50 cursor-pointer transition-colors group"
+                                    className={`
+                                        border-b cursor-pointer transition-colors group
+                                        ${isWaiting ? 'bg-slate-50 text-slate-400' :
+                                            isDraft ? 'bg-slate-50 opacity-60' :
+                                                'bg-white hover:bg-orange-50'}
+                                    `}
                                     onClick={() => onRowClick && onRowClick(item.employeeId)}
                                 >
-                                    <td className="px-6 py-4 font-medium text-slate-900">{index + 1}.</td>
+                                    <td className="px-6 py-4 font-medium text-slate-900">
+                                        {index + 1}.
+                                        {/* [T-027] Show Draft status (แสดงสถานะ Draft) */}
+                                        {isDraft && (
+                                            <span className="ml-2 text-xs font-normal text-slate-400 uppercase tracking-wider">(Draft)</span>
+                                        )}
+                                    </td>
                                     <td className="px-6 py-4">{item.employeeId}</td>
                                     <td className="px-6 py-4">
                                         <button
@@ -139,19 +153,19 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                                     </td>
                                     <td className="px-6 py-4">{dateStr}</td>
                                     <td className="px-6 py-4 text-center font-bold text-slate-800">
-                                        {Number(item.totalScore).toFixed(2)}%
+                                        {isWaiting ? '-' : `${Number(item.totalScore).toFixed(2)}%`}
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        {getCategoryPercentage(item, 'A')}%
+                                        {isWaiting ? '-' : `${getCategoryPercentage(item, 'A')}%`}
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        {getCategoryPercentage(item, 'B')}%
+                                        {isWaiting ? '-' : `${getCategoryPercentage(item, 'B')}%`}
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        {item.level === 'Monthly Staff' ? '0%' : `${getCategoryPercentage(item, 'C')}%`}
+                                        {isWaiting ? '-' : (item.level === 'Monthly Staff' ? '0%' : `${getCategoryPercentage(item, 'C')}%`)}
                                     </td>
                                     <td className="px-6 py-4 text-center text-indigo-600 font-semibold">
-                                        {item.evaluation?.aiScore || 0}
+                                        {isWaiting ? '-' : (item.evaluation?.aiScore || 0)}
                                     </td>
                                 </tr>
                             );

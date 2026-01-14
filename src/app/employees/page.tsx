@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, getDocs, addDoc, doc, writeBatch, serverTimestamp, query, orderBy, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, writeBatch, serverTimestamp, query, orderBy, where, Timestamp, FieldPath } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Employee } from '../../types/employee';
 import * as XLSX from 'xlsx';
@@ -125,7 +125,8 @@ export default function EmployeeListPage() {
                     warningCount: d.warningCount || 0,
                     totalAbsentDays: d.totalAbsentDays || 0,
                     evaluationScore: evalScore !== undefined ? evalScore : null,
-                    isEvaluator: isEvaluator // Extra Field for Logic
+                    isEvaluator: isEvaluator, // Extra Field for Logic
+                    pdNumber: d.pdNumber || "" // [T-030]
                 } as any;
             });
 
@@ -621,7 +622,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
             if (fileType === 'users') {
                 // --- Master Data Import Logic (Upsert) - Matching migrate.js ---
                 // Mapping: migrate.js uses specific Thai column names. We should support them.
-                const findCol = (keywords: string[]) => headerStr.findIndex(h => keywords.some(k => h.includes(k) || h === k));
+                const findCol = (keywords: string[]) => headerStr.findIndex(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
 
                 const firstNameIdx = findCol(["ชื่อไทย", "FirstName", "ชื่อ"]);
                 const lastNameIdx = findCol(["นามสกุลไทย", "LastName", "นามสกุล"]);
@@ -742,10 +743,14 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                             } else {
                                 // Update existing
                                 evalRef = evalSnaps.docs[0].ref;
-                                batch.update(evalRef, {
-                                    [`scores.${selectedScoreItem}`]: rawScore,
-                                    updatedAt: serverTimestamp()
-                                });
+                                // Update existing
+                                evalRef = evalSnaps.docs[0].ref;
+                                // Fix: Use FieldPath to handle special characters in score keys (แก้ไข: ใช้ FieldPath เพื่อรองรับตัวอักขระพิเศษใน Key ของคะแนน)
+                                batch.update(
+                                    evalRef,
+                                    new FieldPath('scores', selectedScoreItem), rawScore,
+                                    new FieldPath('updatedAt'), serverTimestamp()
+                                );
                             }
                             updateCount++;
                         }

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { DashboardItem } from '@/types/dashboard';
+import { GRADE_COLOR_MAP } from '@/utils/grade-calculation';
 
 interface GradeDonutChartProps {
     data: DashboardItem[];
@@ -18,17 +19,8 @@ export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data, onGradeC
         return Object.entries(counts).map(([name, value]) => ({ name, value }));
     }, [data]);
 
-    // Colors match the UI in the prompt roughly (Orange/Dark theme logic, but adaptive)
-    // Or match grade colors? The prompt image shows specific colors for sections of donut.
-    // NI=Gray/White, E=Orange, ME=Light Orange
-    const COLORS: Record<string, string> = {
-        'E': '#f97316', // Orange-500
-        'OE': '#fbbf24', // Amber-400
-        'ME': '#fcd34d', // Amber-300
-        'BE': '#d1d5db', // Gray-300
-        'NI': '#9ca3af', // Gray-400
-        'N/A': '#e5e7eb'
-    };
+    // Use centralized colors
+    const COLORS = GRADE_COLOR_MAP;
 
     const total = data.length;
 

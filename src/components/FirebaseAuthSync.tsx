@@ -22,9 +22,11 @@ export default function FirebaseAuthSync() {
 
                     console.log("🔄 Syncing Firebase Auth...");
 
-                    // 2. Request Custom Token from our API
                     const response = await fetch('/api/auth/firebase-token');
-                    if (!response.ok) throw new Error('Failed to fetch token');
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `Failed to fetch token: ${response.status}`);
+                    }
 
                     const { token } = await response.json();
 

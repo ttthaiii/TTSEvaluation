@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { adminAuth } from "@/lib/firebase-admin";
+import { getAdminAuth } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -16,7 +16,9 @@ export async function GET() {
             return NextResponse.json({ error: "No User ID found" }, { status: 400 });
         }
 
-        // 2. Create Custom Token via Admin SDK
+        // 2. Create Custom Token via Admin SDK (Lazy Init)
+        const adminAuth = getAdminAuth();
+
         // We use the employeeId as the Firebase UID to keep things consistent
         const firebaseToken = await adminAuth.createCustomToken(userId, {
             role: (session.user as any).role || 'User',
@@ -27,6 +29,6 @@ export async function GET() {
 
     } catch (error) {
         console.error("Error minting token:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return NextResponse.json({ error: "Internal Server Error: " + (error instanceof Error ? error.message : String(error)) }, { status: 500 });
     }
 }
