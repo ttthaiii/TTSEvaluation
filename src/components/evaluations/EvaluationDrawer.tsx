@@ -13,10 +13,11 @@ import { EvaluationRecord } from '../../types/evaluation';
 interface EvaluationDrawerProps {
     employeeId: string;
     onClose: () => void;
-    onSuccess?: (data: EvaluationRecord) => void; // 🔥 New Prop
+    onSuccess?: (data: EvaluationRecord) => void;
+    isEmbedded?: boolean; // 🔥 New Prop for Split Screen
 }
 
-export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, onClose, onSuccess }) => {
+export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, onClose, onSuccess, isEmbedded = false }) => {
     // 🔥 Initialize hook with the specific employee ID
     const {
         loading,
@@ -73,11 +74,91 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
         );
     }
 
+    // 🔥 Embedded Mode (Split Screen)
+    if (isEmbedded) {
+        return (
+            <div className="w-full h-full flex flex-col bg-[#f8fafc] border-l border-slate-200 relative animate-in fade-in duration-300">
+                {/* Header */}
+                <div className="bg-white px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+                    <div className="overflow-hidden">
+                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 truncate">
+                            📝 แบบประเมิน (Evaluation)
+                        </h2>
+                        <p className="text-xs text-slate-500 truncate">
+                            {selectedEmployee.firstName} {selectedEmployee.lastName}
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleSafeClose}
+                        className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors shrink-0"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+                    {/* Info & Stats */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                        <EmployeeInfoCard employee={selectedEmployee} evalYear={evalYear} isCompact={true} />
+                        {employeeStats && (
+                            <div className="mt-6 pt-6 border-t border-slate-50">
+                                <EmployeeStatsCard
+                                    stats={employeeStats}
+                                    disciplineScore={disciplineScore}
+                                    totalScore={totalScore}
+                                    readOnlyItems={readOnlyItems}
+                                    showTotalScore={completedEvaluationIds.has(selectedEmployee.id)}
+                                    gradingRules={gradeRules}
+                                    isCompact={true}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Evaluation Sections */}
+                    {displayCategories.map((cat) => (
+                        <EvaluationSection
+                            key={cat.id}
+                            category={cat}
+                            scores={scores}
+                            onScoreChange={handleScoreChange}
+                            onOpenPopup={openPopup}
+                            activePopupId={activePopupId}
+                        />
+                    ))}
+
+                    {/* Submit Button */}
+                    <button
+                        className="w-full bg-[#4caf50] hover:bg-[#43a047] text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-[0.99] text-xl flex items-center justify-center gap-2"
+                        onClick={() => handleSubmit(onSuccess)}
+                    >
+                        <span>บันทึกการประเมิน</span>
+                    </button>
+
+                    <div className="h-10"></div>
+                </div>
+
+                {/* Helper Popup */}
+                {popupData && (
+                    <ScoreHelperPopup
+                        data={popupData}
+                        popupScores={popupScores}
+                        onClose={closePopup}
+                        onPopupScoreChange={handlePopupScore}
+                        onApplyScore={applyPopupScore}
+                    />
+                )}
+            </div>
+        );
+    }
+
+    // Standard Portal Drawer Mode (Mobile / Overlay)
     return (
         <>
             {mounted && createPortal(
                 <>
-                    {/* [T-034] Backdrop: Lowerz-index (40) vs Drawer (50) */}
+                    {/* [T-034] Backdrop */}
                     <div
                         onClick={handleSafeClose}
                         title="คลิกเพื่อปิดหน้าต่าง (มีระบบยืนยัน)"
@@ -85,10 +166,10 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
                         className="fixed inset-0 bg-black/20 z-[40] cursor-pointer animate-in fade-in duration-300"
                     />
 
-                    {/* [T-034] Drawer Content: Portaled to Body to escape stacked context */}
+                    {/* [T-034] Drawer Content */}
                     <div
-                        className="fixed top-0 right-0 bottom-0 w-[600px] bg-[#f8fafc] border-l border-slate-200 shadow-2xl overflow-hidden z-[50] flex flex-col animate-in slide-in-from-right duration-300"
-                        onClick={(e) => e.stopPropagation()} // Hard stop propagation
+                        className="fixed top-0 right-0 bottom-0 w-[600px] max-w-full bg-[#f8fafc] border-l border-slate-200 shadow-2xl overflow-hidden z-[50] flex flex-col animate-in slide-in-from-right duration-300"
+                        onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header */}
                         <div className="bg-white px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">

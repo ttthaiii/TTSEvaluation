@@ -46,7 +46,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="h-screen w-screen overflow-hidden flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 px-4 sm:px-6">
+        <div className="fixed inset-0 h-[100dvh] w-screen overflow-hidden flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 px-4 sm:px-6">
             <div className="bg-white p-6 sm:p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 mb-4 shadow-sm">

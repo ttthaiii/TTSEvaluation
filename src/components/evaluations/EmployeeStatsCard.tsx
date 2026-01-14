@@ -67,10 +67,12 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                             <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-xl">
                                 📊
                             </div>
+
                             <div>
                                 <div className="flex items-center gap-2">
                                     <h4 className="font-bold text-blue-900 text-lg">{item.title}</h4>
                                     {item.description && <InfoTooltip text={item.description} />}
+                                    <InfoTooltip text="ผลคะแนนจากการร่วมกิจกรรม AI for Everyone ภายใน 31 ธันวาคม 2025" />
                                 </div>
                             </div>
                         </div>

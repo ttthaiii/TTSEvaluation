@@ -8,6 +8,7 @@ import { SectionStackChart } from '../../components/dashboard/SectionStackChart'
 import { GradeDistributionChart } from '../../components/dashboard/GradeDistributionChart';
 import { CompetencyRadarChart } from '../../components/dashboard/CompetencyRadarChart';
 import { EmployeeTable } from '../../components/dashboard/EmployeeTable';
+import { EvaluationDrawer } from '../../components/evaluations/EvaluationDrawer'; // 🔥 Import Drawer
 import { getGrade, GRADE_RANGES, GradeCriteria } from '@/utils/grade-calculation';
 import { Loader2 } from 'lucide-react';
 import { Employee } from '@/types/employee';
@@ -38,6 +39,9 @@ export default function DashboardPage() {
     // [T-History] Comparison State
     const [isCompareMode, setIsCompareMode] = useState(false);
     const [selectedYears, setSelectedYears] = useState<string[]>(['2024']);
+
+    // [Speckit T-Split] Selected Employee for Split View
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
 
     // 🔥 Use Historical Data Hook
     const { historicalData } = useHistoricalData(isCompareMode, selectedYears);
@@ -177,22 +181,38 @@ export default function DashboardPage() {
 
     // handleResetFilters moved to hook alias 'resetFilters'
 
-    if (loading) {
-        return (
-            <div className="flex h-screen w-full items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
-            </div>
-        );
-    }
+
+
+    // Import EvaluationDrawer dynamically to avoid SSR issues if usually not needed, or standard import if fine.
+    // Standard import is fine. Need to add import at top separately.
+    // Ensure import { EvaluationDrawer } from '../../components/evaluations/EvaluationDrawer'; is present.
+
 
     const handleEvaluate = (id: string) => {
-        router.push(`/evaluations/${id}?returnTo=/dashboard`);
+        // [Speckit T-Split] Check screen size
+        // If Mobile/Tablet (< 1024px), use legacy Redirect
+        if (window.innerWidth < 1024) {
+            router.push(`/evaluations/${id}?returnTo=/dashboard`);
+        } else {
+            // Desktop: Open Split View
+            setSelectedEmployeeId(id);
+        }
+    };
+
+    const handleCloseEvaluation = () => {
+        setSelectedEmployeeId(null);
+    };
+
+    const handleEvaluationSuccess = () => {
+        refreshData();
+        setSelectedEmployeeId(null);
     };
 
     return (
-        <div className="flex h-screen bg-slate-50 overflow-hidden">
-            {/* Left Side: Dashboard Content - Full Width */}
-            <div className={`flex-1 flex flex-col h-full transition-all duration-300 overflow-hidden`}>
+        <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900">
+            {/* Left Side: Dashboard Content */}
+            {/* If Drawer Open: 60%, Else: 100% */}
+            <div className={`flex flex-col h-full transition-all duration-300 overflow-hidden ${selectedEmployeeId ? 'w-full lg:w-[60%] xl:w-[65%]' : 'w-full'}`}>
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth pb-20 md:pb-6"> {/* Padding for mobile nav */}
                     {/* Header */}
                     <div className="mb-6 rounded-lg bg-gradient-to-r from-orange-400 to-orange-600 p-6 text-white shadow-lg">
@@ -229,14 +249,14 @@ export default function DashboardPage() {
                         }}
                     />
 
-                    {/* Charts Grid */}
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 mb-6">
+                    {/* Charts Grid - Adjust Layout when Split */}
+                    <div className={`grid grid-cols-1 gap-6 mb-6 ${selectedEmployeeId ? 'lg:grid-cols-1 xl:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
                         {/* Row 1: Donut & Stacked Bar */}
                         <div className="rounded-lg bg-white p-4 shadow lg:col-span-1">
                             <h3 className="mb-4 text-lg font-semibold text-slate-700">จำนวนพนักงานแยกตามผลการประเมิน</h3>
                             <GradeDonutChart data={filteredData} onGradeClick={handleGradeClick} />
                         </div>
-                        <div className="rounded-lg bg-white p-4 shadow lg:col-span-2">
+                        <div className={`rounded-lg bg-white p-4 shadow ${selectedEmployeeId ? 'lg:col-span-1 xl:col-span-1' : 'lg:col-span-2'}`}>
                             <h3 className="mb-4 text-lg font-semibold text-slate-700">จำนวนพนักงานแยกเกรด ตามส่วนงานต่างๆ</h3>
                             <SectionStackChart
                                 data={filteredData}
@@ -246,7 +266,7 @@ export default function DashboardPage() {
                         </div>
 
                         {/* Row 2: Distribution & Radar (Adjusted layout) */}
-                        <div className="rounded-lg bg-white p-4 shadow lg:col-span-2">
+                        <div className={`rounded-lg bg-white p-4 shadow ${selectedEmployeeId ? 'lg:col-span-1 xl:col-span-2' : 'lg:col-span-2'}`}>
                             <h3 className="mb-4 text-lg font-semibold text-slate-700">
                                 {isCompareMode ? 'เปรียบเทียบการกระจายตัวผลการประเมิน' : 'แจกแจงการกระจายตัวผลการประเมิน'}
                             </h3>
@@ -280,7 +300,18 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {/* Drawer Removed - Redirects to /evaluations/[id] */}
+            {/* Right Side: Evaluation Drawer (Split View) */}
+            {selectedEmployeeId && (
+                <div className="hidden lg:flex flex-col w-[40%] xl:w-[35%] h-full border-l border-slate-200 bg-white shadow-xl z-20 transition-all duration-300">
+                    {/* Import EvaluationDrawer dynamically inside if needed, or top level */}
+                    <EvaluationDrawer
+                        employeeId={selectedEmployeeId}
+                        onClose={handleCloseEvaluation}
+                        onSuccess={handleEvaluationSuccess}
+                        isEmbedded={true}
+                    />
+                </div>
+            )}
         </div>
     );
 }
