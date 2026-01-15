@@ -1,9 +1,9 @@
-'use client';
-
 import { useState } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useModal } from '../context/ModalContext';
+import { Eye, EyeOff } from 'lucide-react';
+import { signOut } from 'next-auth/react'; // 🔥 Import signOut
 
 interface ChangePasswordModalProps {
     isOpen: boolean;
@@ -15,6 +15,8 @@ export default function ChangePasswordModal({ isOpen, onClose, employeeId }: Cha
     const { showAlert } = useModal();
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
     if (!isOpen) return null;
@@ -41,9 +43,14 @@ export default function ChangePasswordModal({ isOpen, onClose, employeeId }: Cha
                 password: newPassword
             });
 
-            await showAlert('สำเร็จ', '✅ เปลี่ยนรหัสผ่านเรียบร้อยแล้ว');
+            await showAlert('สำเร็จ', '✅ เปลี่ยนรหัสผ่านเรียบร้อยแล้ว กรุณาเข้าสู่ระบบใหม่'); // Message updated
+
+            // 🔥 Force Logout (Manual Redirect to avoid 0.0.0.0 issues)
+            await signOut({ redirect: false });
+            window.location.href = '/login';
+
             onClose();
-            // Reset fields
+            // Reset fields (though likely redirect happens first)
             setNewPassword('');
             setConfirmPassword('');
 
@@ -68,26 +75,44 @@ export default function ChangePasswordModal({ isOpen, onClose, employeeId }: Cha
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">รหัสผ่านใหม่ (New Password)</label>
-                        <input
-                            type="password"
-                            required
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
-                            placeholder="ระบุรหัสผ่านใหม่..."
-                        />
+                        <div className="relative">
+                            <input
+                                type={showNewPassword ? "text" : "password"}
+                                required
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all pr-10"
+                                placeholder="ระบุรหัสผ่านใหม่..."
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                            >
+                                {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                        </div>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">ยืนยันรหัสผ่านใหม่ (Confirm New Password)</label>
-                        <input
-                            type="password"
-                            required
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
-                            placeholder="ระบุรหัสผ่านใหม่อีกครั้ง..."
-                        />
+                        <div className="relative">
+                            <input
+                                type={showConfirmPassword ? "text" : "password"}
+                                required
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all pr-10"
+                                placeholder="ระบุรหัสผ่านใหม่อีกครั้ง..."
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                            >
+                                {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                        </div>
                     </div>
 
                     <div className="pt-4 flex gap-3">

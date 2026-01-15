@@ -209,7 +209,7 @@ export default function DashboardPage() {
     };
 
     return (
-        <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900">
+        <div className="flex h-[calc(100vh-4rem)] bg-slate-50 overflow-hidden text-slate-900">
             {/* Left Side: Dashboard Content */}
             {/* If Drawer Open: 60%, Else: 100% */}
             <div className={`flex flex-col h-full transition-all duration-300 overflow-hidden ${selectedEmployeeId ? 'w-full lg:w-[60%] xl:w-[65%]' : 'w-full'}`}>

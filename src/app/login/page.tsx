@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Lock, User } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, PlayCircle, X, FileText, Youtube } from 'lucide-react';
+import HelpModal from '@/components/HelpModal';
 
 export default function LoginPage() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showHelp, setShowHelp] = useState(false); // 🔥 Help Modal State
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
@@ -47,7 +50,7 @@ export default function LoginPage() {
 
     return (
         <div className="fixed inset-0 h-[100dvh] w-screen overflow-hidden flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 px-4 sm:px-6">
-            <div className="bg-white p-6 sm:p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
+            <div className="bg-white p-6 sm:p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-100 flex flex-col relative z-10">
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 mb-4 shadow-sm">
                         <Lock className="w-8 h-8 text-indigo-600" />
@@ -91,13 +94,24 @@ export default function LoginPage() {
                                 <Lock className="h-5 w-5 text-slate-400" />
                             </div>
                             <input
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="block w-full pl-10 pr-3 py-3 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-colors text-base"
+                                className="block w-full pl-10 pr-10 py-3 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-colors text-base"
                                 placeholder="••••••••"
                                 required
                             />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                            >
+                                {showPassword ? (
+                                    <EyeOff className="h-5 w-5" />
+                                ) : (
+                                    <Eye className="h-5 w-5" />
+                                )}
+                            </button>
                         </div>
                     </div>
 
@@ -109,7 +123,22 @@ export default function LoginPage() {
                         {loading ? 'กำลังตรวจสอบ...' : 'เข้าสู่ระบบ'}
                     </button>
                 </form>
+
+                {/* 🔥 Help Button */}
+                <div className="mt-6 pt-6 border-t border-slate-100 text-center">
+                    <button
+                        onClick={() => setShowHelp(true)}
+                        className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors font-medium"
+                    >
+                        <PlayCircle className="w-4 h-4" />
+                        ดูวิดีโอแนะนำ / คู่มือการใช้งาน
+                    </button>
+                </div>
             </div>
+
+
+            {/* 🔥 Video/Help Modal */}
+            <HelpModal isOpen={showHelp} onClose={() => setShowHelp(false)} />
         </div>
     );
 }

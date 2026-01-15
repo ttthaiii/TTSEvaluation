@@ -5,7 +5,8 @@ import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 import ChangePasswordModal from './ChangePasswordModal';
-import { LogOut, User as UserIcon, LayoutDashboard, ClipboardList } from 'lucide-react';
+import HelpModal from './HelpModal'; // 🔥 Import HelpModal
+import { LogOut, User as UserIcon, LayoutDashboard, ClipboardList, Youtube } from 'lucide-react'; // 🔥 Import Youtube Icon
 import { usePathname, useRouter } from 'next/navigation';
 import { useModal } from '../context/ModalContext';
 
@@ -13,6 +14,7 @@ export default function Navbar() {
     const { data: session } = useSession();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [isHelpModalOpen, setIsHelpModalOpen] = useState(false); // 🔥 Help Modal State
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -156,12 +158,13 @@ export default function Navbar() {
                                 </button>
 
                                 {isProfileOpen && (
-                                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-fade-in-down origin-top-right">
+                                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-fade-in-down origin-top-right">
                                         <div className="p-2 border-b border-gray-100 sm:hidden">
                                             <div className="text-sm font-semibold text-slate-800 px-3">{user.name}</div>
                                             <div className="text-xs text-slate-500 px-3 pb-2">{(user as any).employeeId}</div>
                                         </div>
                                         <div className="p-1">
+                                            {/* 1. Change Password */}
                                             <button
                                                 onClick={() => {
                                                     setIsProfileOpen(false);
@@ -177,8 +180,23 @@ export default function Navbar() {
                                                 <span className="text-sm font-medium">เปลี่ยนรหัสผ่าน</span>
                                             </button>
 
+                                            {/* 2. Help / Video Manual */}
+                                            <button
+                                                onClick={() => {
+                                                    setIsProfileOpen(false);
+                                                    setIsHelpModalOpen(true);
+                                                }}
+                                                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-blue-50 text-slate-700 hover:text-blue-700 transition-colors text-left"
+                                            >
+                                                <div className="p-1.5 bg-blue-100 rounded-md text-blue-600">
+                                                    <Youtube className="w-4 h-4" />
+                                                </div>
+                                                <span className="text-sm font-medium">ดูวิดีโอ / คู่มือการใช้งาน</span>
+                                            </button>
+
                                             <div className="my-1 border-t border-gray-100"></div>
 
+                                            {/* 3. Logout */}
                                             <button
                                                 onClick={async (e) => {
                                                     if (navigationGuard) {
@@ -208,11 +226,17 @@ export default function Navbar() {
                 </div>
             </nav>
             {user && (
-                <ChangePasswordModal
-                    isOpen={isPasswordModalOpen}
-                    onClose={() => setIsPasswordModalOpen(false)}
-                    employeeId={(user as any).id}
-                />
+                <>
+                    <ChangePasswordModal
+                        isOpen={isPasswordModalOpen}
+                        onClose={() => setIsPasswordModalOpen(false)}
+                        employeeId={(user as any).id}
+                    />
+                    <HelpModal
+                        isOpen={isHelpModalOpen}
+                        onClose={() => setIsHelpModalOpen(false)}
+                    />
+                </>
             )}
         </>
     );

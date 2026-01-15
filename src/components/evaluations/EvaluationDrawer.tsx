@@ -147,6 +147,7 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
                         onClose={closePopup}
                         onPopupScoreChange={handlePopupScore}
                         onApplyScore={applyPopupScore}
+                        mode="contained" // 🔥 Use Contained Modal for Split Screen (Overlays just this section)
                     />
                 )}
             </div>
@@ -234,7 +235,9 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
                             <div className="h-10"></div> {/* Spacer */}
                         </div>
 
-                        {/* Helper Popup (Self-Portaled) */}
+                        {/* Helper Popup (Embedded in Drawer) */}
+                        {/* Helper Popup (Embedded in Drawer) */}
+                        {/* Helper Popup (Overlay Mode for Drawer) */}
                         {popupData && (
                             <ScoreHelperPopup
                                 data={popupData}
@@ -242,9 +245,10 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
                                 onClose={closePopup}
                                 onPopupScoreChange={handlePopupScore}
                                 onApplyScore={applyPopupScore}
+                                mode="global" // 🔥 Use Global Portal for Mobile/Standard Drawer
                             />
                         )}
-                    </div>
+                    </div> // End of inner flex column
                 </>,
                 document.body
             )}

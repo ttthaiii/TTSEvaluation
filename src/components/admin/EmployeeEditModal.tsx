@@ -320,6 +320,7 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
             await updateDoc(userRef, updateData);
             await showAlert("สำเร็จ", "✅ บันทึกข้อมูลความปลอดภัยเรียบร้อย");
             setNewPassword('');
+            onClose(); // 🔥 Close modal after successful save
         } catch (error) {
             console.error("Error saving security settings:", error);
             await showAlert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการบันทึก");
