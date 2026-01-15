@@ -22,13 +22,13 @@ export default function EvaluationPage() {
     selectedEmployeeId,
     handleEmployeeChange,
     existingEvaluations,
-    completedEvaluationIds, // 🔥 New Value
+    completedEvaluationIds,
     selectedEmployee,
     employeeStats,
     disciplineScore,
-    totalScore, // 🔥 Get totalScore
+    totalScore,
     displayCategories,
-    readOnlyItems, // 🔥 Extract new prop
+    readOnlyItems,
     scores,
     handleScoreChange,
     handleSubmit,
@@ -79,7 +79,7 @@ export default function EvaluationPage() {
             selectedEmployeeId={selectedEmployeeId}
             onEmployeeChange={handleEmployeeChange}
             existingEvaluations={existingEvaluations}
-            completedEvaluationIds={completedEvaluationIds} // 🔥 New Prop
+            completedEvaluationIds={completedEvaluationIds}
           />
 
           {/* Employee Info Box & Criteria */}
@@ -91,10 +91,10 @@ export default function EvaluationPage() {
                 <EmployeeStatsCard
                   stats={employeeStats}
                   disciplineScore={disciplineScore}
-                  totalScore={totalScore} // 🔥 Pass totalScore
-                  readOnlyItems={readOnlyItems} // 🔥 Pass items for display
-                  showTotalScore={completedEvaluationIds.has(selectedEmployee.id)} // 🔥 Only show if completed
-                  gradingRules={gradeRules} // 🔥 Dynamic Grading Rules
+                  totalScore={totalScore}
+                  readOnlyItems={readOnlyItems}
+                  showTotalScore={completedEvaluationIds.has(selectedEmployee.id)}
+                  gradingRules={gradeRules}
                 />
               )}
             </div>
@@ -119,15 +119,33 @@ export default function EvaluationPage() {
           )}
         </div>
 
-        {/* ================= MODAL LAYER (Popup) ================= */}
+        {/* ================= RIGHT COLUMN (Desktop Sidebar) ================= */}
         {popupData && (
-          <ScoreHelperPopup
-            data={popupData}
-            popupScores={popupScores}
-            onClose={closePopup}
-            onPopupScoreChange={handlePopupScore}
-            onApplyScore={applyPopupScore}
-          />
+          <div className="hidden lg:block w-[450px] shrink-0 sticky top-6 h-[calc(100vh-3rem)] overflow-hidden pt-16">
+            <ScoreHelperPopup
+              data={popupData}
+              popupScores={popupScores}
+              onClose={closePopup}
+              onPopupScoreChange={handlePopupScore}
+              onApplyScore={applyPopupScore}
+              mode="inline"
+              className="h-full shadow-xl border-l border-slate-100"
+            />
+          </div>
+        )}
+
+        {/* ================= MODAL LAYER (Mobile Only) ================= */}
+        {popupData && (
+          <div className="lg:hidden">
+            <ScoreHelperPopup
+              data={popupData}
+              popupScores={popupScores}
+              onClose={closePopup}
+              onPopupScoreChange={handlePopupScore}
+              onApplyScore={applyPopupScore}
+              mode="global"
+            />
+          </div>
         )}
       </div>
     </div>

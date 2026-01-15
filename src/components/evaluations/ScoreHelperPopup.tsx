@@ -17,63 +17,26 @@ interface ScoreHelperPopupProps {
     className?: string;
 }
 
-export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
-    data,
-    popupScores,
-    onClose,
-    onPopupScoreChange,
-    onApplyScore,
-    mode = 'global', // Default to global (Portal)
-    className = ''
-}) => {
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-
-        const handleScrollLock = () => {
-            // Only lock if mode is global AND screen is mobile (< 1024px)
-            if (mode === 'global' && window.matchMedia('(max-width: 1023px)').matches) {
-                document.body.style.overflow = 'hidden';
-            } else {
-                document.body.style.overflow = '';
-            }
-        };
-
-        handleScrollLock(); // Initial check
-
-        // Listen for resize to toggle lock/unlock
-        window.addEventListener('resize', handleScrollLock);
-
-        return () => {
-            setMounted(false);
-            window.removeEventListener('resize', handleScrollLock);
-            if (mode === 'global') {
-                document.body.style.overflow = '';
-            }
-        };
-    }, [mode]);
-
-    const calculateAverage = () => {
-        const values = Object.values(popupScores);
-        if (values.length < data.subItems.length) return null;
-        const sum = values.reduce((a, b) => a + b, 0);
-        return (sum / values.length).toFixed(2);
-    };
-
-    const avg = calculateAverage();
-
-    // ─────────────────────────────────────────────────────────────
-    // Shared Content Component
-    // ─────────────────────────────────────────────────────────────
-    const PopupContent = () => (
+// ─────────────────────────────────────────────────────────────
+// Inner Content Component (Extracted to prevent re-mounts)
+// ─────────────────────────────────────────────────────────────
+const InnerPopupContent: React.FC<{
+    data: PopupData;
+    popupScores: Record<number, number>;
+    onClose: () => void;
+    onPopupScoreChange: (index: number, score: number) => void;
+    onApplyScore: () => void;
+    mode: string;
+    avg: string | null;
+}> = ({ data, popupScores, onClose, onPopupScoreChange, onApplyScore, mode, avg }) => {
+    return (
         <div className={`
             bg-white overflow-hidden shadow-2xl border border-slate-200 flex flex-col
             ${mode === 'global'
                 ? 'w-full max-w-lg rounded-2xl animate-in zoom-in-95 duration-200 relative z-10 max-h-[90vh] m-auto pointer-events-auto'
                 : mode === 'contained'
                     ? 'absolute inset-4 rounded-2xl shadow-slate-200 border-slate-100 animate-in zoom-in-95 duration-200 z-50'
-                    : 'rounded-2xl shadow-slate-200 border-slate-100 max-h-[85vh] lg:max-h-[calc(100vh-6rem)] animate-in slide-in-from-right-10 fade-in duration-300' // Inline
+                    : 'rounded-2xl shadow-slate-200 border-slate-100 max-h-[85vh] lg:max-h-[calc(100vh-6rem)] animate-in slide-in-from-right-10 fade-in duration-300 bg-white' // Inline
             }
         `}>
             {/* Header */}
@@ -144,6 +107,68 @@ export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
             </div>
         </div>
     );
+};
+
+export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
+    data,
+    popupScores,
+    onClose,
+    onPopupScoreChange,
+    onApplyScore,
+    mode = 'global', // Default to global (Portal)
+    className = ''
+}) => {
+    const [mounted, setMounted] = useState(false);
+    const [isDesktop, setIsDesktop] = useState(false);
+
+    // Debugging logs kept as requested by user previously, though main issue is structure
+    console.log("🧩 ScoreHelperPopup Rendered:", {
+        mode,
+        isDesktop,
+        mounted,
+        dataTitle: data?.title,
+        subItemsCount: data?.subItems?.length,
+        hasPopupScores: Object.keys(popupScores).length
+    });
+
+    useEffect(() => {
+        setMounted(true);
+
+        const checkScreen = () => {
+            // Using 1024px as the breakpoint matching Tailwind's 'lg'
+            const matches = window.matchMedia('(min-width: 1024px)').matches;
+            console.log("📏 ScoreHelperPopup Resize Check:", { matches, mode });
+            setIsDesktop(matches);
+
+            // Lock body scroll only if we are in global mode (mobile view) and NOT on desktop
+            if (mode === 'global' && !matches) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = '';
+            }
+        };
+
+        // Initial check
+        checkScreen();
+
+        // Add resize listener to handle dynamic resizing
+        window.addEventListener('resize', checkScreen);
+
+        return () => {
+            setMounted(false);
+            window.removeEventListener('resize', checkScreen);
+            document.body.style.overflow = ''; // Cleanup scroll lock
+        };
+    }, [mode]);
+
+    const calculateAverage = () => {
+        const values = Object.values(popupScores);
+        if (values.length < data.subItems.length) return null;
+        const sum = values.reduce((a, b) => a + b, 0);
+        return (sum / values.length).toFixed(2);
+    };
+
+    const avg = calculateAverage();
 
     // ─────────────────────────────────────────────────────────────
     // Render: Contained Mode (Desktop / Split Screen)
@@ -153,7 +178,15 @@ export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
             <div className={`absolute inset-0 z-[100] bg-black/50 backdrop-blur-[1px] flex items-center justify-center p-4 animate-in fade-in duration-200 overscroll-contain ${className}`}>
                 {/* Click backdrop to close */}
                 <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
-                <PopupContent />
+                <InnerPopupContent
+                    data={data}
+                    popupScores={popupScores}
+                    onClose={onClose}
+                    onPopupScoreChange={onPopupScoreChange}
+                    onApplyScore={onApplyScore}
+                    mode={mode}
+                    avg={avg}
+                />
             </div>
         );
     }
@@ -162,9 +195,18 @@ export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
     // Render: Inline Mode (Desktop Page Side-by-Side)
     // ─────────────────────────────────────────────────────────────
     if (mode === 'inline') {
+        console.log("✅ Rendering Inline Mode");
         return (
-            <div className={`w-full lg:w-[480px] shrink-0 lg:sticky lg:top-[5.5rem] z-40 ${className}`}>
-                <PopupContent />
+            <div className={`w-full h-full ${className}`}>
+                <InnerPopupContent
+                    data={data}
+                    popupScores={popupScores}
+                    onClose={onClose}
+                    onPopupScoreChange={onPopupScoreChange}
+                    onApplyScore={onApplyScore}
+                    mode={mode}
+                    avg={avg}
+                />
             </div>
         );
     }
@@ -174,11 +216,27 @@ export const ScoreHelperPopup: React.FC<ScoreHelperPopupProps> = ({
     // ─────────────────────────────────────────────────────────────
     if (!mounted) return null;
 
+    // Safety check: Don't render global portal if screen is desktop width
+    if (isDesktop && mode === 'global') {
+        console.log("🚫 Skipping Global Mode (Desktop Detected)");
+        return null; // Return null so we don't duplicate
+    }
+
+    console.log("🌍 Rendering Global Mode (Mobile)");
+
     return createPortal(
         <div className={`fixed top-0 left-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-hidden overscroll-none touch-none ${className}`}>
             {/* Click backdrop to close */}
             <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
-            <PopupContent />
+            <InnerPopupContent
+                data={data}
+                popupScores={popupScores}
+                onClose={onClose}
+                onPopupScoreChange={onPopupScoreChange}
+                onApplyScore={onApplyScore}
+                mode={mode}
+                avg={avg}
+            />
         </div>,
         document.body
     );

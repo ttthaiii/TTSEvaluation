@@ -8,17 +8,14 @@ import { EmployeeInfoCard } from '@/components/evaluations/EmployeeInfoCard';
 import { EmployeeStatsCard } from '@/components/evaluations/EmployeeStatsCard';
 import { EvaluationSection } from '@/components/evaluations/EvaluationSection';
 import { ScoreHelperPopup } from '@/components/evaluations/ScoreHelperPopup';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { ArrowLeft } from 'lucide-react';
+
 export default function EvaluationPage() {
     const router = useRouter();
     const params = useParams();
     const employeeId = params?.id as string;
     const searchParams = useSearchParams();
     const returnTo = searchParams?.get('returnTo') || '/dashboard';
-
-    // Check for desktop screen size
-    const isDesktop = useMediaQuery('(min-width: 1024px)');
 
     const {
         loading,
@@ -46,15 +43,13 @@ export default function EvaluationPage() {
 
     const { rules: gradeRules } = useGradingRules();
 
-    // 🔥 Body Scroll Lock: เฉพาะ Mobile + มี Popup เปิดอยู่
+    // Debug Log
     useEffect(() => {
-        if (!isDesktop && popupData) {
-            document.body.style.overflow = 'hidden';
-            return () => {
-                document.body.style.overflow = '';
-            };
+        console.log("📄 Page [ID]: popupData changed:", popupData);
+        if (popupData) {
+            console.log("👀 FORCE PROBE: Inline Renderer Triggered in Page State");
         }
-    }, [isDesktop, popupData]);
+    }, [popupData]);
 
     if (loading) {
         return (
@@ -78,19 +73,26 @@ export default function EvaluationPage() {
     };
 
     const handleSuccess = () => {
-        // Refresh data context if needed (global) or just rely on new fetch on dashboard
         router.push(returnTo);
     };
 
     return (
         <div className="min-h-screen bg-slate-50 pb-10">
-            {/* Main Layout Container - Hybrid Approach */}
-            {/* Desktop: Flex Row with Gap (Split Screen) */}
-            {/* Mobile: Flex Column (Standard Flow) */}
-            <div className="max-w-[1920px] mx-auto flex flex-col lg:flex-row gap-6 items-start relative px-0 lg:px-6">
+            {/* Main Layout Container - Grid Architecture */}
+            {/* Switched to CSS Grid for guaranteed side-by-side layout stability */}
+            <div className={`
+                max-w-[1920px] mx-auto 
+                grid gap-6 items-start relative px-0 lg:px-6
+                items-stretch
+                transition-all duration-300 ease-in-out
+                ${popupData
+                    ? 'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_450px]'
+                    : 'grid-cols-1'
+                }
+            `}>
 
                 {/* LEFT SIDE: Main Evaluation Form */}
-                <div className="flex-1 w-full min-w-0">
+                <div className="w-full min-w-0">
 
                     {/* Header - Sticky within the left column flow on Desktop */}
                     <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm transition-all">
@@ -147,9 +149,11 @@ export default function EvaluationPage() {
                     </div>
                 </div>
 
-                {/* RIGHT SIDE: Desktop Inline Sidebar (Side-by-Side) */}
-                {isDesktop && popupData && (
-                    <div className="shrink-0 pt-20 pr-4">
+                {/* 🔥 RIGHT SIDE: Desktop Inline Sidebar (Side-by-Side) */}
+                {/* CSS Grid Cell - Only rendered when popupData exists */}
+                {popupData && (
+                    <div className="block sticky top-6 h-[calc(100vh-3rem)] overflow-hidden pt-16 border-2 border-red-500">
+                        {/* PROBE: Force Inline Render */}
                         <ScoreHelperPopup
                             data={popupData}
                             popupScores={popupScores}
@@ -157,20 +161,24 @@ export default function EvaluationPage() {
                             onPopupScoreChange={handlePopupScore}
                             onApplyScore={applyPopupScore}
                             mode="inline"
+                            className="h-full shadow-xl border-l border-slate-100"
                         />
                     </div>
                 )}
 
-                {/* Mobile Only: Full Screen Modal (Overlay) */}
-                {!isDesktop && popupData && (
-                    <ScoreHelperPopup
-                        data={popupData}
-                        popupScores={popupScores}
-                        onClose={closePopup}
-                        onPopupScoreChange={handlePopupScore}
-                        onApplyScore={applyPopupScore}
-                        mode="global"
-                    />
+                {/* 🔥 Mobile Only: Full Screen Modal (Overlay) */}
+                {/* CSS hidden on desktop */}
+                {popupData && (
+                    <div className="lg:hidden">
+                        <ScoreHelperPopup
+                            data={popupData}
+                            popupScores={popupScores}
+                            onClose={closePopup}
+                            onPopupScoreChange={handlePopupScore}
+                            onApplyScore={applyPopupScore}
+                            mode="global"
+                        />
+                    </div>
                 )}
             </div>
         </div>
