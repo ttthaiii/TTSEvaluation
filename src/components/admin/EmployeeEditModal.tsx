@@ -82,10 +82,9 @@ export default function EmployeeEditModal({ isOpen, onClose, employeeId, employe
                 const data = statsSnap.data();
 
                 // [Speckit T-Sync] Unify AI Score keys
-                // User reports [O]-1 holds the correct value (e.g. 5).
-                // We must prioritize these legacy keys over standard 'aiScore' if present.
+                // Fix: Prioritize standard 'aiScore' if available. Fallback to legacy keys only if 'aiScore' is missing or 0.
                 const legacyAiScore = data['[O]-1'] || data['[0]-1'] || data['O-1'] || 0;
-                const finalAiScore = legacyAiScore || data.aiScore || 0;
+                const finalAiScore = data.aiScore || legacyAiScore || 0;
 
                 setStats({
                     totalLateMinutes: data.totalLateMinutes || 0,
