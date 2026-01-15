@@ -46,6 +46,21 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({
                                     <div>
                                         <h4 className={`text-lg font-bold text-slate-800`}>{item.title}</h4>
                                         <p className="text-slate-500 text-base leading-relaxed mt-1">{item.subtitle}</p>
+
+                                        {/* Show Sub-criteria (Helper Items) inline */}
+                                        {item.description && (
+                                            <div className="mt-3 space-y-1">
+                                                {item.description.split('\n').map((line, idx) => {
+                                                    const title = line.split(';')[0]?.trim();
+                                                    if (!title) return null;
+                                                    return (
+                                                        <div key={idx} className="text-sm text-slate-500 font-medium pl-2 border-l-2 border-slate-200">
+                                                            {title}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -57,7 +72,7 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({
                                             : 'bg-white border-slate-200 text-slate-600 hover:border-orange-400 hover:text-orange-600 shadow-sm'
                                         }`}
                                 >
-                                    <span>{isActive ? '☇' : '🧮'}</span> {isActive ? 'คำนวณอยู่' : 'ตัวช่วย'}
+                                    <span>{isActive ? '☇' : '🧮'}</span> {isActive ? 'คำนวณอยู่' : 'ระบบช่วยคำนวณ'}
                                 </button>
                             </div>
 

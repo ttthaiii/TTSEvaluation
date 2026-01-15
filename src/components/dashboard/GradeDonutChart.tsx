@@ -24,6 +24,19 @@ export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data, onGradeC
 
     const total = data.length;
 
+    const RADIAN = Math.PI / 180;
+    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+        return (
+            <text x={x} y={y} fill="#4b5563" textAnchor="middle" dominantBaseline="central" fontSize={12} className="font-medium pointer-events-none">
+                {`${(percent * 100).toFixed(0)}%`}
+            </text>
+        );
+    };
+
     return (
         <div className="h-[300px] w-full relative">
             <style>{`
@@ -42,6 +55,8 @@ export const GradeDonutChart: React.FC<GradeDonutChartProps> = ({ data, onGradeC
                         onClick={(data) => onGradeClick && onGradeClick(data.name)}
                         className="cursor-pointer outline-none focus:outline-none"
                         isAnimationActive={false}
+                        label={renderCustomizedLabel}
+                        labelLine={false}
                     >
                         {chartData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={COLORS[entry.name] || '#8884d8'} stroke="none" className="hover:opacity-80 transition-opacity" cursor="pointer" />
