@@ -40,7 +40,10 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
         handlePopupScore,
         applyPopupScore,
         completedEvaluationIds
-    } = useEvaluation({ defaultEmployeeId: employeeId });
+    } = useEvaluation({
+        defaultEmployeeId: employeeId,
+        onSelectionCancelled: onClose // 🔥 Auto-close if re-eval triggers but user cancels
+    });
 
     // 🔥 Grading Rules
     // Assuming useGradingRules doesn't depend on much state
@@ -111,6 +114,7 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
                                     showTotalScore={completedEvaluationIds.has(selectedEmployee.id)}
                                     gradingRules={gradeRules}
                                     isCompact={true}
+                                    employeeName={`${selectedEmployee.firstName} ${selectedEmployee.lastName}`}
                                 />
                             </div>
                         )}
@@ -207,6 +211,7 @@ export const EvaluationDrawer: React.FC<EvaluationDrawerProps> = ({ employeeId, 
                                             showTotalScore={completedEvaluationIds.has(selectedEmployee.id)}
                                             gradingRules={gradeRules}
                                             isCompact={true}
+                                            employeeName={`${selectedEmployee.firstName} ${selectedEmployee.lastName}`}
                                         />
                                     </div>
                                 )}

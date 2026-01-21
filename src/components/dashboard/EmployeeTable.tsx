@@ -1,5 +1,8 @@
 import React from 'react';
 import { useRouter } from 'next/navigation'; // 🔥 Import useRouter
+import { useState } from 'react'; // 🔥 Import useState
+import { WarningModal } from './WarningModal'; // 🔥 Import Modal
+import { TriangleAlert } from 'lucide-react'; // 🔥 Import Icon
 import { DashboardItem } from '@/types/dashboard';
 import { Category } from '@/types/evaluation';
 import { HO_SECTIONS } from '../../data/evaluation-criteria';
@@ -16,6 +19,21 @@ interface EmployeeTableProps {
 
 export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories = [], onRowClick, onEvaluate, compareYears = [] }) => {
     const router = useRouter(); // 🔥 Initialize Router
+
+    // 🔥 Modal State
+    const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+    const [selectedWarningEmployee, setSelectedWarningEmployee] = useState<{ name: string, warnings: any[] } | null>(null);
+
+    const handleWarningClick = (e: React.MouseEvent, employee: DashboardItem) => {
+        e.stopPropagation();
+        if (employee.warnings && employee.warnings.length > 0) {
+            setSelectedWarningEmployee({
+                name: `${employee.firstName} ${employee.lastName}`,
+                warnings: employee.warnings
+            });
+            setIsWarningModalOpen(true);
+        }
+    };
 
     // 🔥 Safety Helper to find AI Score
     const getAiScore = (item: DashboardItem) => {
@@ -228,6 +246,17 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                                                 {item.firstName} {item.lastName}
                                                 <span className="opacity-0 group-hover:opacity-100 transition-opacity text-xs">↗</span>
                                             </button>
+
+                                            {/* 🔥 Warning Indicator */}
+                                            {item.warnings && item.warnings.length > 0 && (
+                                                <button
+                                                    onClick={(e) => handleWarningClick(e, item)}
+                                                    className="ml-2 bg-red-100 text-red-600 p-1 rounded hover:bg-red-200 transition-colors"
+                                                    title={`มีประวัติการทำผิด ${item.warnings.length} ครั้ง (คลิกเพื่อดูรายละเอียด)`}
+                                                >
+                                                    <TriangleAlert className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">{item.section}</td>
                                         <td className="px-6 py-4">{item.department}</td>
@@ -281,6 +310,15 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({ data, categories =
                     </tbody>
                 </table>
             </div>
+            {/* 🔥 Warning Modal */}
+            {selectedWarningEmployee && (
+                <WarningModal
+                    isOpen={isWarningModalOpen}
+                    onClose={() => setIsWarningModalOpen(false)}
+                    employeeName={selectedWarningEmployee.name}
+                    warnings={selectedWarningEmployee.warnings}
+                />
+            )}
         </div >
     );
 };

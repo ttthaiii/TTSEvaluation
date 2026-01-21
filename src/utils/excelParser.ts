@@ -30,7 +30,12 @@ export const validateData = (data: any[], type: 'attendance' | 'leave' | 'warnin
   // เช็ค Key สำคัญว่ามีอยู่จริงไหม เพื่อป้องกัน HR อัปโหลดผิดไฟล์
   if (type === 'attendance' && !('รหัสพนักงาน' in firstRow)) return false;
   if (type === 'leave' && !('ลาพักร้อน' in firstRow)) return false;
-  if (type === 'warning' && !('รายละเอียดความผิด' in firstRow)) return false;
+  if (type === 'warning') {
+    // Check for either short or long version of details
+    const hasDetails = 'รายละเอียดความผิด' in firstRow || 'รายละเอียดการกระทำความผิด' in firstRow;
+    // Also strictly check for Employee ID if possible, but let's stick to key content
+    if (!hasDetails) return false;
+  }
   if (type === 'other' && !('รหัสพนักงาน' in firstRow)) return false;
 
   return true;

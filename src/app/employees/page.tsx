@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { collection, getDocs, addDoc, doc, writeBatch, serverTimestamp, query, orderBy, where, Timestamp, FieldPath } from 'firebase/firestore';
+import { calculateScores } from '../../utils/score-engine';
+import { collection, query, where, getDocs, orderBy, writeBatch, Timestamp, serverTimestamp, doc, setDoc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Employee } from '../../types/employee';
 import * as XLSX from 'xlsx';
@@ -39,7 +40,7 @@ const parseLeaveTime = (value: any): number => {
         const days = parseInt(parts[0]) || 0;
         const hours = parseInt(parts[1]) || 0;
         const minutes = parseInt(parts[2]) || 0;
-        const totalDays = days + (hours / 24) + (minutes / 1440);
+        const totalDays = days + (hours / 8) + (minutes / 480);
         return Math.round(totalDays * 100) / 100;
     }
     return parseFloat(str) || 0;
@@ -979,6 +980,92 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 return;
             }
 
+
+            // --------------------------------------------------------------------------------
+            // [T-Sync] RECALCULATION LOGIC PREPARATION
+            // --------------------------------------------------------------------------------
+            let scoringRules: any[] = [];
+            let categories: any[] = [];
+            let gradeCriteria: any[] = [];
+            const needsRecalc = ['attendance', 'leave', 'warning', 'score'].includes(fileType);
+
+            if (needsRecalc) {
+                try {
+                    const catsSnap = await getDocs(query(collection(db, 'evaluation_categories'), orderBy('order', 'asc')));
+                    categories = catsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    const formulasSnap = await getDocs(collection(db, 'scoring_formulas'));
+                    scoringRules = formulasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    const rulesSnap = await getDocs(query(collection(db, 'config_grading_rules'), orderBy('min', 'desc')));
+                    gradeCriteria = rulesSnap.docs.map(d => d.data());
+                } catch (err) {
+                    console.warn("⚠️ Failed to pre-fetch scoring rules for auto-recalc:", err);
+                }
+            }
+
+            const tryRecalculateEvaluation = async (userDocId: string, currentYear: number, newStats: any, empId: string) => {
+                try {
+                    const evalPeriod = `${currentYear}-Annual`;
+                    let targetEvalId = evalMap.get(userDocId);
+                    let evalDoc = null;
+                    let evalRef = null;
+
+                    if (targetEvalId) {
+                        evalRef = doc(db, 'evaluations', targetEvalId);
+                        const snap = await getDoc(evalRef);
+                        if (snap.exists()) evalDoc = snap;
+                    }
+
+                    if (!evalDoc) {
+                        const qEval = query(
+                            collection(db, 'evaluations'),
+                            where('employeeDocId', '==', userDocId),
+                            where('period', '==', evalPeriod)
+                        );
+                        const snap = await getDocs(qEval);
+                        if (!snap.empty) {
+                            evalDoc = snap.docs[0];
+                            evalRef = evalDoc.ref;
+                        }
+                    }
+
+                    if (evalDoc && evalRef) {
+                        const evalData = evalDoc.data();
+                        const currentScores = evalData.scores || {};
+
+                        const userSnap = await getDoc(doc(db, 'users', userDocId));
+                        const userData = userSnap.data();
+
+                        const fullStats = { ...newStats, year: currentYear };
+                        if (fullStats.aiScore !== undefined) {
+                            currentScores['[O]-1'] = fullStats.aiScore;
+                        }
+
+                        const { disciplineScore, totalScore } = calculateScores(
+                            fullStats,
+                            currentScores,
+                            scoringRules,
+                            categories,
+                            userData as any
+                        );
+
+                        const newGrade = getGrade(totalScore, gradeCriteria);
+
+                        batch.update(evalRef, {
+                            disciplineScore,
+                            totalScore,
+                            grade: newGrade,
+                            scores: currentScores,
+                            updatedAt: serverTimestamp()
+                        });
+                        console.log(`🔄 Recalculated for ${empId}: ${totalScore} (${newGrade})`);
+                    }
+                } catch (e) {
+                    console.error("Auto-recalc failed for", userDocId, e);
+                }
+            };
+
             if (fileType === 'users') {
                 // --- Master Data Import Logic (Upsert) - Matching migrate.js ---
                 // Mapping: migrate.js uses specific Thai column names. We should support them.
@@ -1180,7 +1267,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                 const scoreIndex = headerStr.findIndex(h => h.includes("Score") || h.includes("คะแนน"));
                 if (scoreIndex === -1) { await showAlert("ข้อมูลไม่ครบถ้วน", "ไม่พบคอลัมน์ 'Score' หรือ 'คะแนน'"); setLoading(false); return; }
 
-                // Loop through each row in Excel and save (วนลูปบันทึกข้อมูลทีละแถว)
+                // Using for..of to allow await
                 for (const row of tableRows) {
                     const empId = String(row[empIdIndex]).trim();
                     const userDocId = employeeMap.get(empId);
@@ -1188,17 +1275,13 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                     if (userDocId) {
                         const rawScore = parseFloat(row[scoreIndex]);
                         if (!isNaN(rawScore)) {
-                            // 🔥 Change Target: Save to yearlyStats instead of evaluations collection
                             const statsRef = doc(db, 'users', userDocId, 'yearlyStats', selectedYear);
-
-                            // [Speckit T-Sync] Remap Legacy Keys to 'aiScore'
                             let targetKey = selectedScoreItem;
                             const aiAliases = ['[O]-1', '[0]-1', 'O-1', '0-1'];
                             if (aiAliases.includes(targetKey)) {
                                 targetKey = 'aiScore';
                             }
 
-                            // Use mapped key
                             const updateData = {
                                 [targetKey]: rawScore,
                                 year: parseInt(selectedYear)
@@ -1206,17 +1289,12 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
                             batch.set(statsRef, updateData, { merge: true });
 
-                            // If it's AI Score, Sync to Root User Doc & Evaluation for Dashboard
                             if (targetKey === 'aiScore') {
-                                // 1. User Doc
                                 batch.set(doc(db, 'users', userDocId), { aiScore: rawScore }, { merge: true });
 
-                                // 2. Evaluation Doc (Robust Sync)
-                                let targetEvalId = evalMap.get(userDocId);
-                                if (!targetEvalId) targetEvalId = `${userDocId}_${selectedYear}`;
-
-                                const evalRef = doc(db, 'evaluations', targetEvalId);
-                                batch.set(evalRef, {
+                                // Also update any existing evaluation structure with AI Score
+                                let targetEvalId = evalMap.get(userDocId) || `${userDocId}_${selectedYear}`;
+                                batch.set(doc(db, 'evaluations', targetEvalId), {
                                     aiScore: rawScore,
                                     employeeDocId: userDocId,
                                     period: currentPeriod,
@@ -1225,10 +1303,36 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                 }, { merge: true });
                             }
 
+                            // 🔥 SMART RECALCULATION
+                            // We construct the stats object as best we can. 
+                            // Since we only have ONE field here, we assume other stats are in DB.
+                            // But 'tryRecalculateEvaluation' fetches the User Doc, but NOT the Yearly Stats doc.
+                            // We should probably fetch the FULL Yearly Stats doc inside 'tryRecalculateEvaluation' 
+                            // OR merge what we have.
+                            // Better: 'tryRecalculateEvaluation' should fetch the LATEST stats from DB + merge our new change.
+
+                            // Let's modify 'tryRecalculateEvaluation' slightly to fetch stats if needed.
+                            // BUT wait, we are inside the 'score' block.
+                            // We can just pass the updateData.
+                            // BUT 'calculateScores' needs ALL stats (late, sick, absent).
+                            // So 'tryRecalculateEvaluation' MUST fetch the current stats from DB.
+
+                            // Re-implementing 'tryRecalculateEvaluation' inline or helper needs to handle this.
+                            // I will fetch stats inside the helper.
+
+                            // First, wait for the helper.
+                            // Fetch existing stats for this user to combine with new update
+                            const currentStatsSnap = await getDoc(statsRef);
+                            const currentStats = currentStatsSnap.exists() ? currentStatsSnap.data() : {};
+                            const fullStats = { ...currentStats, ...updateData };
+
+                            await tryRecalculateEvaluation(userDocId, parseInt(selectedYear), fullStats, empId);
+
                             updateCount++;
                         }
                     }
                 }
+
 
             } else if (fileType === 'attendance') {
                 const lateIndex = headerStr.findIndex(h => h.includes("มาสาย"));
@@ -1236,7 +1340,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
                 if (lateIndex === -1) { await showAlert("ข้อมูลไม่ครบถ้วน", "ไม่พบคอลัมน์ 'มาสาย'"); setLoading(false); return; }
 
-                tableRows.forEach(row => {
+                for (const row of tableRows) {
                     const empId = String(row[empIdIndex]).trim();
                     const docId = employeeMap.get(empId);
 
@@ -1250,26 +1354,33 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                         }
 
                         const statsRef = doc(db, 'users', docId, 'yearlyStats', selectedYear);
-                        batch.set(statsRef, {
+                        const updateData = {
                             totalLateMinutes: minutes,
                             totalAbsentDays: absentDays,
                             year: parseInt(selectedYear)
-                        }, { merge: true });
+                        };
 
-                        // Always sync to main doc for list view consistency
+                        batch.set(statsRef, updateData, { merge: true });
                         batch.set(doc(db, 'users', docId), {
                             totalLateMinutes: minutes,
                             totalAbsentDays: absentDays
                         }, { merge: true });
+
+                        // 🔥 SMART RECALCULATION
+                        const currentStatsSnap = await getDoc(statsRef);
+                        const currentStats = currentStatsSnap.exists() ? currentStatsSnap.data() : {};
+                        const fullStats = { ...currentStats, ...updateData };
+                        await tryRecalculateEvaluation(docId, parseInt(selectedYear), fullStats, empId);
+
                         updateCount++;
                     }
-                });
+                }
 
             } else if (fileType === 'leave') {
                 const sickIndex = headerStr.findIndex(h => h === "ลาป่วย" || h.includes("ลาป่วย"));
                 if (sickIndex === -1) { await showAlert("ข้อมูลไม่ครบถ้วน", "ไม่พบคอลัมน์ 'ลาป่วย'"); setLoading(false); return; }
 
-                tableRows.forEach(row => {
+                for (const row of tableRows) {
                     const empId = String(row[empIdIndex]).trim();
                     const docId = employeeMap.get(empId);
 
@@ -1278,46 +1389,97 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                         const days = parseLeaveTime(rawValue);
 
                         const statsRef = doc(db, 'users', docId, 'yearlyStats', selectedYear);
-                        batch.set(statsRef, {
+                        const updateData = {
                             totalSickLeaveDays: days,
                             year: parseInt(selectedYear)
-                        }, { merge: true });
+                        };
 
-                        // Always sync to main doc
+                        batch.set(statsRef, updateData, { merge: true });
                         batch.set(doc(db, 'users', docId), { totalSickLeaveDays: days }, { merge: true });
+
+                        // 🔥 SMART RECALCULATION
+                        const currentStatsSnap = await getDoc(statsRef);
+                        const currentStats = currentStatsSnap.exists() ? currentStatsSnap.data() : {};
+                        const fullStats = { ...currentStats, ...updateData };
+                        await tryRecalculateEvaluation(docId, parseInt(selectedYear), fullStats, empId);
+
                         updateCount++;
                     }
-                });
+                }
 
             } else if (fileType === 'warning') {
-                const warningCounts = new Map<string, number>();
-                tableRows.forEach(row => {
+                const warningDetails = new Map<string, any[]>();
+                const missingIds: string[] = [];
+
+                // 1. Find Column Indices
+                const findIndex = (keywords: string[]) => headerStr.findIndex(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
+
+                const dateIdx = findIndex(['วันที่กระทำความผิด', 'วันที่', 'Date']);
+                const ruleIdx = findIndex(['ข้อบังคับ', 'Rule']);
+                const detailIdx = findIndex(['รายละเอียด', 'Detail']);
+
+                // 2. Process Rows
+                for (const row of tableRows) {
                     const empId = String(row[empIdIndex]).trim();
                     if (empId) {
-                        const currentCount = warningCounts.get(empId) || 0;
-                        warningCounts.set(empId, currentCount + 1);
-                    }
-                });
+                        const docId = employeeMap.get(empId);
+                        if (docId) {
+                            const currentList = warningDetails.get(docId) || [];
 
-                warningCounts.forEach((count, empId) => {
-                    const docId = employeeMap.get(empId);
-                    if (docId) {
-                        const statsRef = doc(db, 'users', docId, 'yearlyStats', selectedYear);
-                        batch.set(statsRef, {
-                            warningCount: count,
-                            year: parseInt(selectedYear)
-                        }, { merge: true });
+                            // Safe Value Extraction
+                            const getVal = (idx: number) => idx !== -1 ? String(row[idx] || '-').trim() : '-';
 
-                        // Always sync to main doc
-                        batch.set(doc(db, 'users', docId), { warningCount: count }, { merge: true });
-                        updateCount++;
+                            const record = {
+                                date: getVal(dateIdx),
+                                rule: getVal(ruleIdx),
+                                details: getVal(detailIdx)
+                            };
+
+                            currentList.push(record);
+                            warningDetails.set(docId, currentList);
+                        } else {
+                            if (!missingIds.includes(empId)) missingIds.push(empId);
+                            console.warn(`❌ Warning Import: Found ID '${empId}' in CSV but not in DB.`);
+                        }
                     }
-                });
+                }
+
+                // 3. Batch Update
+                for (const [docId, list] of Array.from(warningDetails)) {
+                    // Find original EmpID for logging/recalc (reverse lookup or store in map?)
+                    // docId is the key here. We need empId for logging.
+                    // Optimization: We can just use docId since we have it.
+                    const empId = String(list[0]?.empId || "UNKNOWN"); // Parsing from list? No, list doesn't have empId.
+                    // But we iterate warningDetails which is keyed by docId.
+
+                    const statsRef = doc(db, 'users', docId, 'yearlyStats', selectedYear);
+                    const updateData = {
+                        warningCount: list.length,
+                        warnings: list, // 🔥 Save Details
+                        year: parseInt(selectedYear)
+                    };
+
+                    batch.set(statsRef, updateData, { merge: true });
+                    // Update Main User Doc (Optional cache)
+                    batch.set(doc(db, 'users', docId), { warningCount: list.length }, { merge: true });
+
+                    // 🔥 SMART RECALCULATION
+                    const currentStatsSnap = await getDoc(statsRef);
+                    const currentStats = currentStatsSnap.exists() ? currentStatsSnap.data() : {};
+                    const fullStats = { ...currentStats, ...updateData };
+                    await tryRecalculateEvaluation(docId, parseInt(selectedYear), fullStats, "System");
+
+                    updateCount++;
+                }
+
+                if (missingIds.length > 0) {
+                    await showAlert("แจ้งเตือน", `⚠️ พบรหัสพนักงานที่ไม่รู้จัก ${missingIds.length} รายการ: ${missingIds.slice(0, 5).join(', ')}...`);
+                }
+
             } else if (fileType === 'other') {
-                // For 'other', we map dynamic columns (except ID/Name) to yearlyStats keys
                 const header = tableRows.length > 0 ? tableHeaders : [];
 
-                tableRows.forEach(row => {
+                for (const row of tableRows) {
                     const empId = String(row[empIdIndex]).trim();
                     const userDocId = employeeMap.get(empId);
 
@@ -1326,22 +1488,15 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
                         header.forEach((colName, idx) => {
                             const key = String(colName).trim();
-                            // Skip metadata columns
                             if (key !== 'รหัสพนักงาน' && key !== 'ลำดับ' && key !== 'ชื่อ-นามสกุล' && key !== 'EmployeeID' && key !== 'Name') {
                                 const val = row[idx];
                                 if (val !== undefined && val !== null && val !== "") {
                                     const numVal = parseFloat(val);
                                     if (!isNaN(numVal)) {
-                                        // Auto-map AI Score or cleanup key
                                         const lowerKey = key.toLowerCase();
-                                        // 🔥 Match "AI Score" OR legacy keys like "[0]-1", "[O]-1", "O-1" (found in DB)
                                         if (lowerKey.includes('ai') && lowerKey.includes('score') ||
                                             key === '[0]-1' || key === '[O]-1' || key === 'O-1' || key === '0-1') {
-
-                                            // [Speckit T-Sync] Standardize on 'aiScore' ONLY.
-                                            // Do NOT save the original key (safeKey) to prevent duplications like [O]-1 in DB.
                                             scoreData['aiScore'] = numVal;
-
                                         } else {
                                             const safeKey = key.replace(/[ .]/g, '_');
                                             scoreData[safeKey] = numVal;
@@ -1353,32 +1508,21 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
 
                         if (Object.keys(scoreData).length > 0) {
                             const statsRef = doc(db, 'users', userDocId, 'yearlyStats', selectedYear);
-                            batch.set(statsRef, {
+                            const updateData = {
                                 ...scoreData,
                                 year: parseInt(selectedYear)
-                            }, { merge: true });
+                            };
 
+                            batch.set(statsRef, updateData, { merge: true });
 
-                            // 🔥 Sync AI Score to Root User Doc for Dashboard Visibility
                             if (scoreData['aiScore'] !== undefined) {
-                                // 1. Update User Doc
                                 batch.set(doc(db, 'users', userDocId), {
                                     aiScore: scoreData['aiScore']
                                 }, { merge: true });
 
-
-                                // 2. 🔥 Update Existing Evaluation (ROBUST)
-                                // Only update if we can find the correct document or create a valid one
-                                let targetEvalId = evalMap.get(userDocId);
-                                if (!targetEvalId) {
-                                    targetEvalId = `${userDocId}_${selectedYear}`; // Fallback ID
-                                }
-
-                                const evalRef = doc(db, 'evaluations', targetEvalId);
-
-                                batch.set(evalRef, {
+                                let targetEvalId = evalMap.get(userDocId) || `${userDocId}_${selectedYear}`;
+                                batch.set(doc(db, 'evaluations', targetEvalId), {
                                     aiScore: scoreData['aiScore'],
-                                    // Ensure these fields exist so it is queryable if undefined
                                     employeeDocId: userDocId,
                                     period: currentPeriod,
                                     evaluationYear: parseInt(selectedYear),
@@ -1386,10 +1530,16 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (
                                 }, { merge: true });
                             }
 
+                            // 🔥 SMART RECALCULATION
+                            const currentStatsSnap = await getDoc(statsRef);
+                            const currentStats = currentStatsSnap.exists() ? currentStatsSnap.data() : {};
+                            const fullStats = { ...currentStats, ...updateData };
+                            await tryRecalculateEvaluation(userDocId, parseInt(selectedYear), fullStats, empId);
+
                             updateCount++;
                         }
                     }
-                });
+                }
             }
 
             if (updateCount > 0) {

@@ -19,4 +19,12 @@ export interface Employee {
   birthDate?: string | Timestamp | null; // Added field
   age?: number; // Added field
   aiScore?: number; // 🔥 Added for Dashboard fallback
+  warnings?: WarningRecord[]; // 🔥 Added for Warning Letter feature (บันทึกรายการใบเตือน)
+}
+
+// 🔥 Struct for Warning Record (โครงสร้างข้อมูลใบเตือน)
+export interface WarningRecord {
+  date: string; // วันที่กระทำความผิด
+  rule: string; // ข้อบังคับการทำงาน
+  details: string; // รายละเอียดการกระทำความผิด
 }

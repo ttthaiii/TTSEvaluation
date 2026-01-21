@@ -124,6 +124,7 @@ export default function EvaluationPage() {
                                 readOnlyItems={readOnlyItems}
                                 showTotalScore={completedEvaluationIds.has(selectedEmployee.id)}
                                 gradingRules={gradeRules}
+                                employeeName={`${selectedEmployee.firstName} ${selectedEmployee.lastName}`}
                             />
                         )}
 

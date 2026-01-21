@@ -1,16 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { WarningModal } from '../dashboard/WarningModal'; // 🔥 Import Warning Modal
 import { InfoTooltip } from '../ui/InfoTooltip';
 import { getGrade, GradeCriteria } from '../../utils/grade-calculation';
-
-export interface EmployeeStats {
-    totalLateMinutes: number;
-    totalSickLeaveDays: number;
-    totalAbsentDays: number;
-    warningCount: number;
-    year: number;
-    // aiScore removed but kept flexibile for backward compatibility if needed
-    [key: string]: any;
-}
+import { EmployeeStats } from '../../types/evaluation'; // 🔥 Use shared type
 
 export interface EmployeeStatsCardProps {
     stats: EmployeeStats;
@@ -19,13 +11,22 @@ export interface EmployeeStatsCardProps {
     readOnlyItems?: { id: string; title: string; score: number | string; description?: string }[];
     showTotalScore?: boolean;
     gradingRules?: GradeCriteria[];
-    isCompact?: boolean; // 🔥 New Prop
+    isCompact?: boolean;
+    employeeName?: string; // 🔥 New Prop
 }
 
-export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, disciplineScore, totalScore, readOnlyItems = [], showTotalScore = true, gradingRules, isCompact = false }) => {
+export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, disciplineScore, totalScore, readOnlyItems = [], showTotalScore = true, gradingRules, isCompact = false, employeeName = "พนักงาน" }) => {
+
+    // 🔥 Debug Stats
+    if (stats?.warningCount > 0) {
+        console.log("📊 StatsCard Warnings:", { count: stats.warningCount, warnings: stats.warnings });
+    }
 
     // 🔥 Calculate Grade (Dynamic Rules)
     const gradeData = showTotalScore && totalScore ? getGrade(totalScore, gradingRules) : null;
+
+    // 🔥 Modal State for Warnings
+    const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
 
     return (
         <div>
@@ -49,13 +50,26 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                         {isNaN(Number(stats.totalAbsentDays)) ? 0 : stats.totalAbsentDays} <span className="text-sm font-medium text-slate-300">วัน</span>
                     </p>
                 </div>
-                <div className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm ${isCompact ? 'text-left pl-5' : 'text-center'}`}>
+                <div
+                    className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm ${isCompact ? 'text-left pl-5' : 'text-center'} ${stats.warningCount > 0 ? 'cursor-pointer hover:bg-red-50 hover:border-red-100 border-dashed transition-all' : ''}`}
+                    onClick={() => stats.warningCount > 0 && setIsWarningModalOpen(true)}
+                    title={stats.warningCount > 0 ? "คลิกเพื่อดูรายละเอียดใบเตือน" : ""}
+                >
                     <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-1">ใบเตือน</p>
                     <p className={`text-2xl font-bold ${stats.warningCount > 0 ? 'text-rose-500' : 'text-slate-700'}`}>
                         {stats.warningCount || 0} <span className="text-sm font-medium text-slate-300">ใบ</span>
                     </p>
+                    {stats.warningCount > 0 && <p className="text-[10px] text-rose-400 mt-1">กดเพื่อดูรายละเอียด</p>}
                 </div>
             </div>
+
+            {/* 🔥 Warning Details Modal */}
+            <WarningModal
+                isOpen={isWarningModalOpen}
+                onClose={() => setIsWarningModalOpen(false)}
+                employeeName={employeeName} // Pass dynamic name
+                warnings={stats.warnings || []}
+            />
 
             {/* Scores Section */}
             <div className={`grid gap-6 ${isCompact ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>

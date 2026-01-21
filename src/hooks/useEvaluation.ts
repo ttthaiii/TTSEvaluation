@@ -6,15 +6,14 @@ import { db } from '../lib/firebase';
 import { HO_SECTIONS } from '../data/evaluation-criteria';
 import { Employee } from '../types/employee';
 import { calculateServiceTenure, getEvaluationYear, getCurrentPeriod, getRawTenure } from '../utils/dateUtils';
-import { Category, EvaluationRecord, QuestionItem, ScoringRule } from '../types/evaluation';
-import { EmployeeStats } from '../components/evaluations/EmployeeStatsCard';
+import { Category, EvaluationRecord, QuestionItem, ScoringRule, EmployeeStats } from '../types/evaluation';
 import { PopupData } from '../components/evaluations/ScoreHelperPopup';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useModal } from '../context/ModalContext'; // 🔥 Import useModal
 import { useEvaluationContext } from '../context/EvaluationContext';
 
-export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
+export const useEvaluation = (props?: { defaultEmployeeId?: string; onSelectionCancelled?: () => void }) => {
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -277,7 +276,10 @@ export const useEvaluation = (props?: { defaultEmployeeId?: string }) => {
 
             if (!confirmReEval) {
                 // User Cancelled: Do not switch, do not update state
-                // If called from handleEmployeeChange -> The UI Select will revert on re-render if selectedEmployeeId didn't change.
+                // [T-UX] Trigger cancellation callback (e.g., to close drawer)
+                if (props?.onSelectionCancelled) {
+                    props.onSelectionCancelled();
+                }
                 return;
             }
         }

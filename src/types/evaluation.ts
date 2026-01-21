@@ -40,7 +40,8 @@ export interface EmployeeStats {
     totalSickLeaveDays: number;
     totalAbsentDays: number;
     warningCount: number;
+    warnings?: any[]; // 🔥 Added warnings array for detailed view
     aiScore?: number;
     year: number;
-    [key: string]: number | undefined; // Allow dynamic keys
+    [key: string]: any; // Allow dynamic keys
 }
