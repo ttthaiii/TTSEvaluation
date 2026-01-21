@@ -29,7 +29,7 @@ export const GradeDistributionChart: React.FC<GradeDistributionChartProps> = ({
 
         // 2. Prepare Base Data Structure
         // [ { name: 'E', current: 10, '2024': 5, '2023': 8 }, ... ]
-        const grades = ['E', 'OE', 'ME', 'BE', 'NI'];
+        const grades = ['NI', 'BE', 'ME', 'OE', 'E'];
 
         return grades.map(grade => {
             const item: any = { name: grade, current: currentCounts[grade] };
