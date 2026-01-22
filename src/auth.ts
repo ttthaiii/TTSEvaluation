@@ -1,69 +1,12 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { db } from "./lib/firebase"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { authConfig } from "./auth.config"
 
-// 🚀 Custom Cookie Configuration for Firebase Hosting
-// Firebase Hosting terminates SSL, so the internal server sees HTTP (not HTTPS).
-// We must ensure Cookies are still treated as secure/SameSite if needed, 
-// OR relax them if the mismatch causes issues.
-const useSecureCookies = process.env.NODE_ENV === "production";
-const cookiePrefix = useSecureCookies ? "__Secure-" : "";
-// 🔥 FORCE PRODUCTION URL: If environment variable fails, use the known Firebase App URL
-const productionUrl = "https://tts2004evaluation.web.app";
-const authUrl = process.env.AUTH_URL || (process.env.NODE_ENV === "production" ? productionUrl : "http://localhost:3000");
-const hostName = new URL(authUrl).hostname;
+// 🔥 Client SDK is removed
+// 🔥 Admin SDK will be imported dynamically to support Edge Runtime in Middleware
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-    trustHost: true,
-    // 🔥 RESTORED: Manual Cookie Config is REQUIRED for Firebase Hosting
-    // because SSL is terminated at the proxy, so the app sees 'http'.
-    // We must FORCE the cookie to be Secure and have the correct name.
-    cookies: {
-        sessionToken: {
-            name: `__session`, // 🔥 FIREBASE HOSTING REQUIREMENT: Only cookies named '__session' are passed to the backend.
-            options: {
-                httpOnly: true,
-                sameSite: 'lax',
-                path: '/',
-                secure: true, // Always secure for production/firebase
-            }
-        },
-    },
-    callbacks: {
-        async redirect({ url, baseUrl }) {
-            // FIREBASE FIX: If the url is 0.0.0.0, replace it with our authUrl
-            if (url.includes('0.0.0.0')) {
-                const fixedUrl = url.replace('https://0.0.0.0:8080', authUrl).replace('http://0.0.0.0:8080', authUrl);
-                return fixedUrl;
-            }
-
-            // ✅ Allow relative callback URLs
-            if (url.startsWith("/")) return `${baseUrl}${url}`;
-
-            // ✅ Allow callback URLs on the same origin
-            if (new URL(url).origin === baseUrl) return url;
-
-            // Default to baseUrl
-            return baseUrl;
-        },
-        async jwt({ token, user }) {
-            if (user) {
-                token.id = user.id
-                token.employeeId = (user as any).employeeId
-                token.role = (user as any).role
-            }
-            return token
-        },
-        async session({ session, token }) {
-            if (session.user) {
-                (session.user as any).id = token.id;
-                (session.user as any).employeeId = token.employeeId;
-                (session.user as any).role = token.role;
-            }
-            return session
-        }
-    },
+    ...authConfig,
     providers: [
         Credentials({
             credentials: {
@@ -76,8 +19,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 }
 
                 try {
+                    console.log("🔐 Authorize called for:", credentials.username);
+
                     // 🔥 Admin Login Bypass (Hardcoded)
                     if (credentials.username === 'admin' && credentials.password === 'admin') {
+                        console.log("✅ Admin Bypass Success");
                         return {
                             id: 'admin-user',
                             name: 'Administrator',
@@ -88,35 +34,52 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         }
                     }
 
-                    // 1. Query User (Check Employee ID OR Username)
-                    const usersRef = collection(db, "users")
+                    // 1. Query User using ADMIN SDK (Bypasses Rules)
+                    // 🚀 DYNAMIC IMPORT: Fix "Node.js API not supported in Edge Runtime"
+                    // Middleware imports this file but runs on Edge. Admin SDK is Node-only.
+                    const { getAdminDb } = await import("./lib/firebase-admin");
+                    const db = getAdminDb();
+                    const usersRef = db.collection("users");
 
-                    // A. Try Employee ID first
-                    let q = query(usersRef, where("employeeId", "==", credentials.username))
-                    let querySnapshot = await getDocs(q)
+                    let querySnapshot;
+
+                    // A. Try Employee ID
+                    console.log("🔍 Searching ID:", credentials.username);
+                    querySnapshot = await usersRef.where("employeeId", "==", credentials.username).get();
+                    console.log("   > Found via ID:", !querySnapshot.empty);
 
                     if (querySnapshot.empty) {
-                        // B. Try Custom Username if ID not found
-                        q = query(usersRef, where("username", "==", credentials.username))
-                        querySnapshot = await getDocs(q)
+                        // B. Try Username
+                        console.log("🔍 Searching Username:", credentials.username);
+                        querySnapshot = await usersRef.where("username", "==", credentials.username).get();
+                        console.log("   > Found via Username:", !querySnapshot.empty);
                     }
 
                     if (querySnapshot.empty) {
-                        console.log("❌ User not found")
+                        // C. Try Email
+                        console.log("🔍 Searching Email:", credentials.username);
+                        querySnapshot = await usersRef.where("email", "==", credentials.username).get();
+                        console.log("   > Found via Email:", !querySnapshot.empty);
+                    }
+
+                    if (querySnapshot.empty) {
+                        console.log("❌ User not found in DB");
                         return null
                     }
 
-                    const userDoc = querySnapshot.docs[0]
-                    const userData = userDoc.data()
+                    const userDoc = querySnapshot.docs[0];
+                    const userData = userDoc.data();
+                    console.log("👤 User Found:", userData.firstName, userData.email, "Role:", userData.role);
 
-                    // 🔥 SPECIAL RULE: Grant Admin rights to specific users
+                    // 🔥 SPECIAL RULE
                     if (userData.employeeId === '100348') {
                         userData.role = 'Admin';
                     }
 
                     // 2. Validate Password
-                    // Priority: 1. Custom Password (in DB)  2. Default (Employee ID)
                     let isValid = false;
+                    console.log("🔑 Checking Password...");
+
                     if (userData.password && userData.password.length > 0) {
                         isValid = credentials.password === userData.password;
                     } else {
@@ -124,29 +87,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     }
 
                     if (!isValid) {
-                        console.log("❌ Invalid password")
+                        console.log("❌ Invalid password mismatch");
                         return null
                     }
 
-                    // 3. Check for Validator Rights (Must be Admin OR Have Subordinates)
-                    let isEvaluator = false;
-                    if (userData.role === 'Admin') {
-                        isEvaluator = true;
-                    } else {
-                        // Check if this user is an evaluator for anyone
-                        const subQuery = query(usersRef, where("evaluatorId", "==", userData.employeeId));
-                        const subSnapshot = await getDocs(subQuery);
-                        if (!subSnapshot.empty) {
-                            isEvaluator = true;
-                        }
-                    }
+                    // 3. User Found
+                    console.log("✅ Login Successful for:", userData.email);
 
-                    if (!isEvaluator) {
-                        console.log("❌ User has no evaluation rights")
-                        return null
-                    }
-
-                    // 4. Return User Object
                     return {
                         id: userDoc.id,
                         name: `${userData.firstName} ${userData.lastName}`,
@@ -156,17 +103,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         role: userData.role || "User",
                     }
                 } catch (error) {
-                    console.error("Auth Error:", error)
+                    console.error("🔥 Auth Crash/Error:", error)
                     return null
                 }
             },
         }),
     ],
-    pages: {
-        signIn: "/login",
-    },
-    // 🔥 Fixed: Fallback secret for dev environment
-    // HARDCODED SECRET FOR DEBUGGING: To rule out env var mismatch
-    secret: "TTSen2004",
-    debug: true, // Enable debug logs
 })

@@ -33,6 +33,7 @@ export interface EvaluationRecord {
     aiScore?: number; // AI Score
     status?: 'Draft' | 'Completed'; // สถานะการประเมิน: Draft (ร่าง) หรือ Completed (เสร็จสมบูรณ์)
     finalGrade?: string; // เกรดสรุปผล
+    encryptedSalaryData?: string; // ข้อมูลเงินเดือนที่เข้ารหัส (Encrypted salary adjustment data)
 }
 
 export interface EmployeeStats {
@@ -44,4 +45,5 @@ export interface EmployeeStats {
     aiScore?: number;
     year: number;
     [key: string]: any; // Allow dynamic keys
+    encryptedSalaryData?: string; // Encrypted JSON string containing { salaryIncrease, bonus, etc. }
 }

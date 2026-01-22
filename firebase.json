@@ -15,5 +15,18 @@
                 "APP_SERVICE_ACCOUNT_KEY": "secret:APP_SERVICE_ACCOUNT_KEY"
             }
         }
+    },
+    "emulators": {
+        "auth": {
+            "port": 9099
+        },
+        "firestore": {
+            "port": 8080
+        },
+        "ui": {
+            "enabled": true,
+            "port": 4000
+        },
+        "singleProjectMode": true
     }
 }

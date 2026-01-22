@@ -92,7 +92,8 @@ export const EvaluationProvider = ({ children }: { children: ReactNode }) => {
                         updatedAt: d.updatedAt,
                         createdAt: d.createdAt,
                         aiScore: d.aiScore,
-                        status: d.status
+                        status: d.status,
+                        encryptedSalaryData: d.encryptedSalaryData // 🔥 Map Encrypted Data
                     } as EvaluationRecord;
                 }
             });

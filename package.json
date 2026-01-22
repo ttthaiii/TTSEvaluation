@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:emulator": "firebase emulators:start --only auth,firestore --import=./firebase-data --export-on-exit",
+    "dev:sandbox": "cross-env NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -11,6 +13,7 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "clsx": "^2.1.1",
+    "crypto-js": "^4.2.0",
     "csv-parser": "^3.2.0",
     "firebase": "^12.6.0",
     "firebase-admin": "^13.6.0",
@@ -26,11 +29,14 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/crypto-js": "^4.2.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
+    "firebase-tools": "^15.3.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

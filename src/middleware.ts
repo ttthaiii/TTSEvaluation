@@ -1,4 +1,9 @@
-import { auth } from "./auth"
+import NextAuth from "next-auth"
+import { authConfig } from "./auth.config"
+
+// 🔥 Create a lightweight auth helper for Edge Middleware
+// This avoids importing 'auth.ts' which contains Node.js-only code (Admin SDK)
+const { auth } = NextAuth(authConfig)
 
 export default auth((req) => {
     const isLoggedIn = !!req.auth

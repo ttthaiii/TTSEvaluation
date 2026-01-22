@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
 // Hardcoded Firebase Config to ensure stability across deployments
 // These are public keys and safe to be in client-side code
@@ -20,6 +20,15 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 
-// 👇 จุดเปลี่ยนสำคัญ: ใส่ 'default' เป็นพารามิเตอร์ตัวที่ 2
-// เพื่อบอกให้ Code วิ่งไปที่ Database ชื่อ "default" (แบบไม่มีวงเล็บ) โดยตรง
-export const db = getFirestore(app, 'default');
+// 👇 จุดเปลี่ยนสำคัญ: ใช้ getFirestore(app) ปกติ เพื่อความเข้ากับ Emulator ได้ดีที่สุด
+export const db = getFirestore(app);
+
+// 🔌 Emulator Connection Logic
+if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
+  console.log("🛠️ Using Firebase Emulators");
+  // Connect Auth Emulator
+  connectAuthEmulator(auth, "http://127.0.0.1:9099");
+
+  // Connect Firestore Emulator
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+}

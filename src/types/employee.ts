@@ -18,8 +18,8 @@ export interface Employee {
   isEvaluator?: boolean; // Added for UI logic
   birthDate?: string | Timestamp | null; // Added field
   age?: number; // Added field
-  aiScore?: number; // 🔥 Added for Dashboard fallback
-  warnings?: WarningRecord[]; // 🔥 Added for Warning Letter feature (บันทึกรายการใบเตือน)
+  baseSalary?: number; // 🔥 Added for Salary Import (ฐานเงินเดือนจริง)
+  messages?: Array<{ role: string; content: string }>; // For AI Chat history (if needed)
 }
 
 // 🔥 Struct for Warning Record (โครงสร้างข้อมูลใบเตือน)

@@ -25,26 +25,42 @@ function getFirebaseAdmin() {
             });
         }
 
-        // Development: Service Account (สำหรับ Localhost)
+        // Emulator Mode
+        if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
+            console.log("🛠️ Using Firebase Emulator (Admin SDK)");
+            process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
+            process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+
+            return admin.initializeApp({
+                projectId: 'tts2004evaluation'
+            });
+        }
+
+        // Development: Service Account (สำหรับ Localhost - Non Emulator)
         const { readFileSync, existsSync } = require("fs");
         const { join } = require("path");
 
         const serviceAccountPath = join(process.cwd(), "service-account.json");
 
         if (!existsSync(serviceAccountPath)) {
-            throw new Error("❌ service-account.json not found");
+            // Fallback if no service account but not explicitly in emulator mode
+            console.warn("⚠️ service-account.json not found. If using emulator, ensure NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true");
         }
 
-        const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, "utf8"));
-
-        // แก้ไข \n ใน private key กรณีเก็บใน env variable หรือ json string
-        if (serviceAccount.private_key) {
-            serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        if (existsSync(serviceAccountPath)) {
+            const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, "utf8"));
+            if (serviceAccount.private_key) {
+                serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+            }
+            console.log("✅ Using Service Account (Local)");
+            return admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount),
+            });
         }
 
-        console.log("✅ Using Service Account (Local)");
+        // Final fallback (might work if logged in via gcloud CLI)
         return admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
+            projectId: 'tts2004evaluation'
         });
 
     } catch (error: any) {

@@ -202,6 +202,18 @@
   - **Cause:** TypeScript config (downlevelIteration) does not support `[...new Set(warnings)]`.
   - **Solution:** Replaced with `.filter()` for deduplication.
 
+- **[T-043-E1-1]** (Edge Runtime Error with Firebase Admin)
+  - **Date:** 2026-01-22
+  - **Status:** Resolved
+  - **Cause:** `firebase-admin` (Node.js only) was statically imported in `auth.ts` which is used by Middleware (Edge Runtime).
+  - **Solution:** Converted `firebase-admin` import in `auth.ts` to Dynamic Import (`await import(...)`) to lazy load it only when needed on Server.
+
+- **[T-043-E2-1]** (Permission Denied in Security Setup)
+  - **Date:** 2026-01-22
+  - **Status:** Resolved
+  - **Cause:** `api/security/setup/route.ts` used Client SDK to write to `system_keys` which is restricted by Firestore Rules.
+  - **Solution:** Refactor API route to use Admin SDK (`getAdminDb`) to bypass rules. Verified success.
+
 
 ---
 

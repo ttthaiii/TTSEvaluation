@@ -132,6 +132,14 @@ export default function Navbar() {
                                                     <div className="font-semibold text-sm">🧮 ตั้งค่าสูตรคำนวณ</div>
                                                     <div className="text-xs text-slate-400 mt-0.5">Scoring Rules & Variables</div>
                                                 </Link>
+                                                <Link
+                                                    href="/admin/salary"
+                                                    onClick={(e) => handleNavigation(e, '/admin/salary')}
+                                                    className="block px-3 py-2.5 rounded-lg hover:bg-orange-50 text-slate-700 hover:text-orange-800 transition-colors"
+                                                >
+                                                    <div className="font-semibold text-sm">💰 ปรับเงินเดือน/โบนัส</div>
+                                                    <div className="text-xs text-slate-400 mt-0.5">Client-Side Encryption (Safe)</div>
+                                                </Link>
                                             </div>
                                         </div>
                                     </div>
