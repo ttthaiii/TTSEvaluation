@@ -19,6 +19,9 @@
 | | | `Firestore: config_grading_rules` | **(New)** Collection: Grading Rules |
 | **F-006** (Dashboard) | T-023 | `src/app/dashboard/page.tsx` | Dashboard UI |
 | | | `src/components/dashboard/EmployeeTable.tsx` | **Links to Eval Page** |
+| **F-007** (Print) | T-044 | `src/app/globals.css` | Print Styles (`@media print`) |
+| | | `src/components/evaluations/EvaluationHeader.tsx` | Print Button Logic |
+| | | `src/app/evaluations/[id]/page.tsx` | Individual Page Print Button |
 
 ## 2. Data / Variable / Component Traceability
 

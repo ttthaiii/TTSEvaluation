@@ -68,23 +68,29 @@ export default function EvaluationPage() {
         {/* ================= LEFT COLUMN ================= */}
         <div className="flex-1 w-full min-w-0 space-y-8">
 
-          <EvaluationHeader evalYear={evalYear} currentPeriod={currentPeriod} />
+          <div className="print:hidden space-y-8">
+            <EvaluationHeader
+              evalYear={evalYear}
+              currentPeriod={currentPeriod}
+              showPrintButton={!!selectedEmployee}
+            />
 
-          <EmployeeSelector
-            sections={sections}
-            selectedSection={selectedSection}
-            onSectionChange={handleSectionChange}
+            <EmployeeSelector
+              sections={sections}
+              selectedSection={selectedSection}
+              onSectionChange={handleSectionChange}
 
-            filteredEmployees={filteredEmployees}
-            selectedEmployeeId={selectedEmployeeId}
-            onEmployeeChange={handleEmployeeChange}
-            existingEvaluations={existingEvaluations}
-            completedEvaluationIds={completedEvaluationIds}
-          />
+              filteredEmployees={filteredEmployees}
+              selectedEmployeeId={selectedEmployeeId}
+              onEmployeeChange={handleEmployeeChange}
+              existingEvaluations={existingEvaluations}
+              completedEvaluationIds={completedEvaluationIds}
+            />
+          </div>
 
           {/* Employee Info Box & Criteria */}
           {selectedEmployee && (
-            <div className="bg-[#efebe9] p-8 rounded-xl shadow-md border-2 border-[#d7ccc8]">
+            <div className="bg-[#efebe9] p-8 print:p-4 rounded-xl shadow-md border-2 border-[#d7ccc8] print:break-inside-avoid shadow-none print:border-none">
               <EmployeeInfoCard employee={selectedEmployee} evalYear={evalYear} />
 
               {employeeStats && (

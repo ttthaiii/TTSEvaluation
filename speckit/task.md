@@ -469,3 +469,14 @@
 - **Confirm Task:**
   - [x] Mobile View แสดงเป็น Card สวยงาม
   - [x] Excel มีข้อมูลปีย้อนหลัง 1 ปี (Score/Grade) ถูกต้อง
+
+### [T-044] Print Evaluation Form
+- **Concept:** สั่งพิมพ์หน้าแบบประเมินเป็นเอกสาร (Paper/PDF) โดยซ่อนส่วนไม่จำเป็น
+- **Status:** [x] Done
+- **Implementation Detail:**
+  1. Add `@media print` in `globals.css` to hide sidebar, popup, and buttons.
+  2. Implement `window.print()` button in `EvaluationHeader` and `[id]/page.tsx`.
+  3. Ensure layout resets to full width (`grid -> block`) during print.
+- **Confirm Task:**
+  - [x] Print Preview shows only the evaluation form.
+  - [x] Score Helper & Menus are hidden.

@@ -19,7 +19,7 @@ export const EmployeeInfoCard: React.FC<EmployeeInfoCardProps> = ({ employee, ev
 
     return (
         <>
-            <div className={`grid grid-cols-1 sm:grid-cols-2 ${isCompact ? 'lg:grid-cols-2' : 'lg:grid-cols-4'} gap-6 mb-8 pb-8 border-b border-gray-100`}>
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${isCompact ? 'lg:grid-cols-2' : 'lg:grid-cols-4'} print:grid-cols-3 gap-6 print:gap-4 mb-8 print:mb-4 pb-8 print:pb-4 border-b border-gray-100 employee-info-grid`}>
                 {/* Row 1 */}
                 <div>
                     <p className="text-slate-400 font-semibold text-xs tracking-wider uppercase mb-1">รหัสพนักงาน</p>

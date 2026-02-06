@@ -8,7 +8,7 @@ import { EmployeeInfoCard } from '@/components/evaluations/EmployeeInfoCard';
 import { EmployeeStatsCard } from '@/components/evaluations/EmployeeStatsCard';
 import { EvaluationSection } from '@/components/evaluations/EvaluationSection';
 import { ScoreHelperPopup } from '@/components/evaluations/ScoreHelperPopup';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Printer } from 'lucide-react';
 
 export default function EvaluationPage() {
     const router = useRouter();
@@ -109,6 +109,16 @@ export default function EvaluationPage() {
                                     <p className="text-xs text-slate-500 mt-1">{selectedEmployee.firstName} {selectedEmployee.lastName}</p>
                                 </div>
                             </div>
+
+                            {/* Print Button (ปุ่มพิมพ์แบบประเมิน) */}
+                            <button
+                                onClick={() => window.print()}
+                                className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors flex items-center justify-center gap-2 print:hidden font-medium"
+                                title="สั่งพิมพ์ (Print)"
+                            >
+                                <Printer size={18} />
+                                <span>Print</span>
+                            </button>
                         </div>
                     </div>
 

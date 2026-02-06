@@ -1,20 +1,42 @@
-import React from 'react';
+import { Printer } from 'lucide-react';
 
 interface EvaluationHeaderProps {
     evalYear: number;
     currentPeriod: string;
+    showPrintButton?: boolean; // Optional: Show print button
 }
 
-export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ evalYear, currentPeriod }) => {
+export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ evalYear, currentPeriod, showPrintButton = false }) => {
+
+    // Print Handler
+    const handlePrint = () => {
+        window.print();
+    };
+
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">แบบประเมินผลการปฏิบัติงาน</h1>
                 <p className="text-slate-500 mt-1">ประจำปีงบประมาณ {evalYear}</p>
             </div>
-            <div className="bg-orange-50 text-orange-700 font-semibold px-4 py-2 rounded-full border border-orange-100 flex items-center gap-2">
-                <span>📅</span>
-                <span>Period: <span className="font-bold">{currentPeriod}</span></span>
+
+            <div className="flex items-center gap-3">
+                {/* Print Button (Optional) */}
+                {showPrintButton && (
+                    <button
+                        onClick={handlePrint}
+                        className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors flex items-center justify-center gap-2 print:hidden font-medium"
+                        title="สั่งพิมพ์แบบประเมิน"
+                    >
+                        <Printer size={18} />
+                        <span>Print</span>
+                    </button>
+                )}
+
+                <div className="bg-orange-50 text-orange-700 font-semibold px-4 py-2 rounded-full border border-orange-100 flex items-center gap-2">
+                    <span>📅</span>
+                    <span>Period: <span className="font-bold">{currentPeriod}</span></span>
+                </div>
             </div>
         </div>
     );

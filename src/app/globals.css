@@ -29,17 +29,153 @@ body {
 }
 
 /* Custom Utilities for Glass/Animation */
+
 @layer utilities {
   .glass-card {
     @apply bg-white border border-gray-100 shadow-sm backdrop-blur-sm;
   }
-  
+
   .animate-bounce-in {
     animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
   }
 
   @keyframes bounce-in {
-    0% { opacity: 0; transform: scale(0.9) translateY(-10px); }
-    100% { opacity: 1; transform: scale(1) translateY(0); }
+    0% {
+      opacity: 0;
+      transform: scale(0.9) translateY(-10px);
+    }
+
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+}
+
+/* Print Styles */
+@media print {
+
+  /* HIDE: Navigation, Buttons, Inputs, Sidebars */
+  button,
+  .no-print,
+  header,
+  nav,
+  .fixed,
+  .sticky,
+  /* Hide sticky headers/sidebars */
+  [class*="ScoreHelper"],
+  /* Specifically hide the Score Helper Popup */
+  .score-helper-container {
+    display: none !important;
+  }
+
+  /* LAYOUT: Reset to full width and flow */
+  body,
+  html,
+  #root,
+  .overflow-y-auto,
+  .overflow-hidden {
+    height: auto !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  /* Reset Grid to Block */
+  .grid {
+    display: block !important;
+  }
+
+  /* Ensure Content is Visible */
+  .main-content,
+  div[class*="EvaluationPage"],
+  /* Try to target main wrappers */
+  .min-h-screen {
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Typography for Print */
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 12pt;
+    color: black !important;
+  }
+
+  /* Hide shadows and borders that look bad in print */
+  .shadow-sm,
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl {
+    box-shadow: none !important;
+  }
+
+  /* Force white background */
+  .bg-slate-50,
+  .bg-\[\#f5f5f5\],
+  .bg-\[\#efebe9\] {
+    background-color: white !important;
+  }
+
+  /* PAGE SETUP: A4 */
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+
+  /* EXCEPTION: Show 'print-visible' buttons (Scoring Buttons) */
+  button.print-visible {
+    display: flex !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    border: 1px solid #cbd5e1 !important;
+    /* Force visible border */
+  }
+
+  /* Force background color for selected buttons in print */
+  button.print-visible.bg-orange-500 {
+    background-color: #f97316 !important;
+    /* orange-500 */
+    color: white !important;
+    border-color: #f97316 !important;
+  }
+
+  /* FORCE GRID LAYOUT for Employee Info (Overrides .grid block reset) */
+  .employee-info-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 1rem !important;
+  }
+
+  /* FORCE PAGE BREAK AVOIDANCE */
+  .print\:break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    display: block !important;
+  }
+
+  .print\:break-after-avoid {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .print\:break-before-avoid {
+    break-before: avoid !important;
+    page-break-before: avoid !important;
+  }
+
+  /* FORCE STATS GRID (4 Columns) */
+  .stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 1rem !important;
+  }
+
+  /* FORCE SCORES GRID (3 Columns) */
+  .scores-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 1.5rem !important;
   }
 }

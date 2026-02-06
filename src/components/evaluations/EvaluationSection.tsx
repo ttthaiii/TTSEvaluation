@@ -19,7 +19,7 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({
 }) => {
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
-            <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50">
+            <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50 print:break-after-avoid print:break-inside-avoid">
                 <div className="flex items-center gap-3">
                     <span className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm">
                         {category.id}
@@ -32,14 +32,15 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({
                 </p>
             </div>
 
-            <div className="p-8 divide-y divide-gray-100">
-                {category.questions.map((item) => {
+            <div className="p-8 divide-y divide-gray-100 print:break-before-avoid">
+                {category.questions.map((item, index) => {
                     const isActive = activePopupId === item.id;
                     const currentScore = scores[item.id];
                     const hasScore = currentScore !== undefined;
+                    const isFirst = index === 0;
 
                     return (
-                        <div key={item.id} className={`py-8 first:pt-4 last:pb-2 transition-all duration-300 ${isActive ? 'bg-orange-50/30 -mx-8 px-8' : ''}`}>
+                        <div key={item.id} className={`py-8 first:pt-4 last:pb-2 transition-all duration-300 ${isActive ? 'bg-orange-50/30 -mx-8 px-8' : ''} print:break-inside-avoid print:py-4 ${isFirst ? 'print:break-before-avoid' : ''}`}>
                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
                                 <div className="flex gap-4">
                                     <span className="text-sm font-semibold text-slate-400 mt-1">[{item.id}]</span>
@@ -85,7 +86,7 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({
                                                 key={score}
                                                 onClick={() => onScoreChange(item.id, score)}
                                                 className={`
-                                                    w-10 h-10 sm:w-12 sm:h-12 rounded-full font-bold text-base sm:text-lg transition-all duration-200 flex items-center justify-center
+                                                    w-10 h-10 sm:w-12 sm:h-12 rounded-full font-bold text-base sm:text-lg transition-all duration-200 flex items-center justify-center print-visible
                                                     ${currentScore === score
                                                         ? 'bg-orange-500 text-white shadow-lg shadow-orange-200 scale-110 ring-4 ring-orange-100'
                                                         : 'bg-white border-2 border-slate-100 text-slate-400 hover:border-orange-400 hover:text-orange-500'

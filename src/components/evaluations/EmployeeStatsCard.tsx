@@ -31,7 +31,7 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
     return (
         <div>
             {/* Stats Grid: Use Compact Mode? */}
-            <div className={`grid gap-4 mb-8 ${isCompact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
+            <div className={`grid gap-4 mb-8 print:mb-4 ${isCompact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} print:grid-cols-4 stats-grid`}>
                 <div className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm ${isCompact ? 'text-left pl-5' : 'text-center'}`}>
                     <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-1">รวมมาสาย</p>
                     <p className={`text-2xl font-bold ${stats.totalLateMinutes > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
@@ -72,7 +72,7 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
             />
 
             {/* Scores Section */}
-            <div className={`grid gap-6 ${isCompact ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+            <div className={`grid gap-6 ${isCompact ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'} print:grid-cols-3 scores-grid`}>
 
                 {/* 🔥 Render ReadOnly Items (Imported Scores) */}
                 {readOnlyItems.map((item) => (
@@ -114,7 +114,7 @@ export const EmployeeStatsCard: React.FC<EmployeeStatsCardProps> = ({ stats, dis
                 </div>
 
                 {showTotalScore && (
-                    <div className={`bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-shadow flex ${isCompact ? 'flex-col items-start gap-4 col-span-2' : 'items-center justify-between'}`}>
+                    <div className={`bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-shadow flex ${isCompact ? 'flex-col items-start gap-4 col-span-2 print:col-span-1' : 'items-center justify-between'}`}>
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-2xl">
                                 🏆
